@@ -139,6 +139,7 @@ sed -i 's/apply_updates = no/apply_updates = yes/' /etc/yum/yum-cron.conf
 sed -i 's/update_cmd = default/update_cmd = security/' /etc/yum/yum-cron.conf
 systemctl enable yum-cron
 systemctl start yum-cron
+
 # Install Docker
 echo "Installing Docker..."
 yum install -y docker
@@ -147,8 +148,7 @@ systemctl start docker
 
 # Install Docker Compose
 echo "Installing Docker Compose..."
-DOCKER_COMPOSE_VERSION="2.21.0"
-curl -L "https://github.com/docker/compose/releases/download/v${DOCKER_COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+curl -L "https://github.com/docker/compose/releases/download/v2.21.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
 chmod +x /usr/local/bin/docker-compose
 
 # Add admin user to docker group
