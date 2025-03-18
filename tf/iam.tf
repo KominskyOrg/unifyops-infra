@@ -50,6 +50,18 @@ resource "aws_iam_role_policy" "ec2_cloudwatch_policy" {
         ]
         Effect   = "Allow"
         Resource = "*"
+      },
+      {
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage",
+          "ecr:ListImages",
+          "ecr:DescribeImages",
+          "ecr:DescribeRepositories"
+        ]
+        Effect   = "Allow"
+        Resource = "*"
       }
     ]
   })
