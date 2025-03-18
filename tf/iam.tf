@@ -45,7 +45,8 @@ resource "aws_iam_role_policy" "ec2_cloudwatch_policy" {
       },
       {
         Action = [
-          "ec2:DescribeTags"
+          "ec2:DescribeTags",
+          "ecr:GetAuthorizationToken"
         ]
         Effect   = "Allow"
         Resource = "*"
