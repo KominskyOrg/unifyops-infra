@@ -197,3 +197,143 @@ output "terraform_role_arn" {
   description = "ARN of the Terraform operations IAM role"
   value       = aws_iam_role.terraform_role.arn
 }
+
+# IAM Roles for ECS
+# ===============
+
+# ECS Task Execution Role
+# This role is used by the ECS service to pull container images and publish logs
+resource "aws_iam_role" "ecs_execution_role" {
+  name = "${local.name}-ecs-execution-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ecs-tasks.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = local.tags
+}
+
+# Attach the AWS managed policy for ECS task execution
+resource "aws_iam_role_policy_attachment" "ecs_execution_role_policy" {
+  role       = aws_iam_role.ecs_execution_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+# ECS Task Role
+# This role is used by the containers themselves when they're running
+resource "aws_iam_role" "ecs_task_role" {
+  name = "${local.name}-ecs-task-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ecs-tasks.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = local.tags
+}
+
+# Custom policy for ECS tasks to access other AWS services if needed
+resource "aws_iam_role_policy" "ecs_task_custom_policy" {
+  name = "${local.name}-ecs-task-custom-policy"
+  role = aws_iam_role.ecs_task_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogStreams"
+        ]
+        Effect   = "Allow"
+        Resource = "arn:aws:logs:*:*:*"
+      }
+      # Add other permissions as needed for your application
+    ]
+  })
+}
+
+# IAM for ECS EC2 Launch Type
+# ===========================
+
+# IAM Role for EC2 instances in the ECS cluster
+resource "aws_iam_role" "ec2_ecs_role" {
+  name = "${local.name}-ec2-ecs-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+
+  tags = local.tags
+}
+
+# Instance profile for EC2 instances in the ECS cluster
+resource "aws_iam_instance_profile" "ecs_instance_profile" {
+  name = "${local.name}-ecs-instance-profile"
+  role = aws_iam_role.ec2_ecs_role.name
+}
+
+# Attach the AWS managed policy for ECS Container instances
+resource "aws_iam_role_policy_attachment" "ec2_ecs_attachment" {
+  role       = aws_iam_role.ec2_ecs_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
+}
+
+# Attach the AWS managed policy for SSM access
+resource "aws_iam_role_policy_attachment" "ec2_ecs_ssm_attachment" {
+  role       = aws_iam_role.ec2_ecs_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+# ECR Access Policy for ECS hosts (EC2 launch type)
+resource "aws_iam_role_policy" "ec2_ecr_access_policy" {
+  name = "${local.name}-ec2-ecr-access-policy"
+  role = aws_iam_role.ec2_ecs_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "ecr:GetAuthorizationToken",
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage",
+          "ecr:ListImages",
+          "ecr:DescribeImages",
+          "ecr:DescribeRepositories"
+        ],
+        Resource = "*"
+      }
+    ]
+  })
+}

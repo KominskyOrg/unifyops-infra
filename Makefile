@@ -56,7 +56,7 @@ plan: ## Plan Terraform changes
 	$(TF_COMMAND) plan -out=plan.tfplan $(TF_COMMON_ARGS)
 
 apply: ## Apply Terraform changes
-	$(TF_COMMAND) apply plan.tfplan $(TF_COMMON_ARGS)
+	$(TF_COMMAND) apply plan.tfplan
 
 destroy: ## Destroy Terraform-managed infrastructure
 	$(TF_COMMAND) destroy $(TF_COMMON_ARGS)
