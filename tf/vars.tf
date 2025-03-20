@@ -23,26 +23,23 @@ variable "infra_env" {
 }
 
 ###############################################################################
-# Developer Variables
+# Networking Variables
 ###############################################################################
 
 variable "my_ip" {
   type        = string
-  description = "The IP address of the developer"
+  description = "The IP address of the developer for SSH access"
 }
 
 ###############################################################################
-# EC2 Variables
+# ECS Configuration Variables
 ###############################################################################
 
-variable "instance_type" {
-  description = "The type of EC2 instance to launch"
-  type        = string
-  default     = "t2.micro"
-}
+# We always use EC2 launch type (free tier) for ECS
+# Fargate has been removed to stay within free tier
 
 variable "key_name" {
-  description = "Name of the SSH key pair to use for the instance"
+  description = "Name of the SSH key pair for EC2 instances"
   type        = string
   default     = null
 }
