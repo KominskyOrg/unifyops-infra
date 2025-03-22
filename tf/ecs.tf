@@ -135,8 +135,17 @@ resource "aws_launch_template" "ecs_lt" {
   user_data = base64encode(<<-EOF
     #!/bin/bash
     echo ECS_CLUSTER=${module.ecs.cluster_name} >> /etc/ecs/ecs.config
-    yum install -y aws-cli
+    echo ECS_LOGLEVEL=debug >> /etc/ecs/ecs.config
+    echo ECS_AVAILABLE_LOGGING_DRIVERS='["json-file","awslogs"]' >> /etc/ecs/ecs.config
+    
+    # Update and restart ECS agent
+    yum install -y aws-cli jq
     yum update -y ecs-init
+    systemctl restart ecs
+    
+    # Log the result for troubleshooting
+    echo "ECS agent configuration completed" >> /var/log/user-data.log
+    systemctl status ecs >> /var/log/user-data.log
   EOF
   )
 
@@ -184,4 +193,29 @@ resource "aws_autoscaling_group" "ecs_asg" {
   lifecycle {
     create_before_destroy = true
   }
+}
+
+# IAM Role and Instance Profile for ECS Instances
+resource "aws_iam_role" "ecs_instance_role" {
+  name = "${local.name}-ecs-instance-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Action = "sts:AssumeRole",
+        Effect = "Allow",
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = local.tags
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_instance_role_attachment" {
+  role       = aws_iam_role.ecs_instance_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
 }
