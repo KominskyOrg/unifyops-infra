@@ -66,7 +66,7 @@ module "ecs_cluster" {
   vpc_id         = module.vpc.vpc_id
   public_subnets = module.vpc.public_subnets
   key_name       = var.key_name
-
+  my_ip          = var.my_ip
   # Default values can be overridden per environment
   instance_type    = "t2.micro"
   min_size         = 1
@@ -74,81 +74,4 @@ module "ecs_cluster" {
   desired_capacity = 1
 
   tags = local.tags
-}
-
-# SSH Security Group
-resource "aws_security_group" "ssh" {
-  name        = "${local.name}-ssh"
-  description = "Security group for SSH access from developer IPs"
-  vpc_id      = module.vpc.vpc_id
-
-  ingress {
-    description = "SSH from developer IPs"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["${var.my_ip}/32"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = merge(
-    local.tags,
-    {
-      Name = "${local.name}-ssh-sg"
-    }
-  )
-}
-
-# Web Security Group for HTTP/HTTPS
-resource "aws_security_group" "web" {
-  name        = "${local.name}-web"
-  description = "Security group for HTTP/HTTPS traffic"
-  vpc_id      = module.vpc.vpc_id
-
-  ingress {
-    description = "HTTPS from anywhere"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    description = "HTTP from anywhere"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = merge(
-    local.tags,
-    {
-      Name = "${local.name}-web-sg"
-    }
-  )
-}
-
-# Output the security group IDs
-output "ssh_security_group_id" {
-  description = "ID of the SSH security group"
-  value       = aws_security_group.ssh.id
-}
-
-output "web_security_group_id" {
-  description = "ID of the web security group"
-  value       = aws_security_group.web.id
 }

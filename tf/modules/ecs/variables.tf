@@ -47,4 +47,9 @@ variable "desired_capacity" {
   description = "Desired capacity of EC2 Auto Scaling Group"
   type        = number
   default     = 1
-} 
+}
+
+variable "my_ip" {
+  description = "Your IP address for SSH access"
+  type        = string
+}
