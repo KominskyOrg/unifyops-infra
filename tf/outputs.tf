@@ -1,6 +1,7 @@
-# Add these outputs to the existing outputs.tf file or create if not exists
-
+###############################################################################
 # ECS Cluster Outputs
+###############################################################################
+
 output "ecs_cluster_id" {
   description = "The ID of the ECS cluster"
   value       = module.ecs_cluster.cluster_id
@@ -16,7 +17,10 @@ output "ecs_cluster_arn" {
   value       = module.ecs_cluster.cluster_arn
 }
 
+###############################################################################
 # Networking Outputs
+###############################################################################
+
 output "vpc_id" {
   description = "The ID of the VPC"
   value       = module.vpc.vpc_id
@@ -37,7 +41,10 @@ output "ecs_security_group_id" {
   value       = module.ecs_cluster.security_group_id
 }
 
+###############################################################################
 # IAM Role Outputs
+###############################################################################
+
 output "ecs_task_execution_role_arn" {
   description = "ARN of the ECS task execution role"
   value       = module.ecs_cluster.task_execution_role_arn
@@ -48,11 +55,30 @@ output "ecs_task_execution_role_name" {
   value       = module.ecs_cluster.task_execution_role_arn
 }
 
-# CloudWatch Logs
+###############################################################################
+# CloudWatch Logs Outputs
+###############################################################################
+
 output "ecs_log_group_name" {
   description = "Name of the CloudWatch log group for ECS"
   value       = module.ecs_cluster.ecs_log_group_name
 }
 
-# Add compatibility outputs if there were existing ones
-# used by other modules via remote state
+###############################################################################
+# RDS Outputs
+###############################################################################
+
+output "rds_endpoint" {
+  description = "The endpoint of the RDS instance"
+  value       = module.db.db_instance_endpoint
+}
+
+output "rds_db_name" {
+  description = "The database name"
+  value       = module.db.db_instance_name
+}
+
+output "db_url_secret_arn" {
+  description = "ARN of the DB URL secret in Secrets Manager"
+  value       = aws_secretsmanager_secret.db_url.arn
+}
