@@ -4,12 +4,27 @@ metadata:
   name: infra
   namespace: argocd
 spec:
-  description: Infrastructure components
-  destinations:
-  - namespace: infra
-    server: https://kubernetes.default.svc
+  description: Cluster infrastructure components
   sourceRepos:
-  - '*'
+    - https://github.com/KominskyOrg/unifyops-infra
+    - https://github.com/KominskyOrg/unifyops-infra.git
+    - https://charts.longhorn.io
+    - https://github.com/cert-manager/cert-manager/releases/download/v1.16.2/cert-manager.yaml
+    - https://github.com/kubernetes-sigs/metrics-server
+  destinations:
+    - namespace: infra
+      server: https://kubernetes.default.svc
+    - namespace: kube-system
+      server: https://kubernetes.default.svc
+    - namespace: longhorn-system
+      server: https://kubernetes.default.svc
+    - namespace: cert-manager
+      server: https://kubernetes.default.svc
+    - namespace: argocd
+      server: https://kubernetes.default.svc
   clusterResourceWhitelist:
-  - group: '*'
-    kind: '*'
+    - group: '*'
+      kind: '*'
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'

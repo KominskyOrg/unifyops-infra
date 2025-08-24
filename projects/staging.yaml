@@ -4,12 +4,16 @@ metadata:
   name: staging
   namespace: argocd
 spec:
-  description: Staging environment
-  destinations:
-  - namespace: staging
-    server: https://kubernetes.default.svc
+  description: Staging environment workloads
   sourceRepos:
-  - '*'
+    - https://github.com/KominskyOrg/unifyops-infra
+    - https://github.com/KominskyOrg/unifyops-infra.git
+  destinations:
+    - namespace: staging
+      server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'
   namespaceResourceWhitelist:
-  - group: '*'
-    kind: '*'
+    - group: '*'
+      kind: '*'

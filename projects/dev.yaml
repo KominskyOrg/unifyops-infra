@@ -4,12 +4,17 @@ metadata:
   name: dev
   namespace: argocd
 spec:
-  description: Dev environment
-  destinations:
-  - namespace: dev
-    server: https://kubernetes.default.svc
+  description: Dev environment workloads
   sourceRepos:
-  - '*'
+    - https://github.com/KominskyOrg/unifyops-infra
+    - https://github.com/KominskyOrg/unifyops-infra.git
+  destinations:
+    - namespace: dev
+      server: https://kubernetes.default.svc
+  # Allow all resource types in dev for flexibility
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'
   namespaceResourceWhitelist:
-  - group: '*'
-    kind: '*'
+    - group: '*'
+      kind: '*'
