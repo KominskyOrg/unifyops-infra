@@ -1,0 +1,17 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: env-infra
+  namespace: argocd
+spec:
+  project: infra
+  source:
+    repoURL: https://github.com/KominskyOrg/unifyops-infra.git
+    targetRevision: main
+    path: envs/infra
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: infra
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true]
