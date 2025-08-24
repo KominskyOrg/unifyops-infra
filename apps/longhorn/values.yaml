@@ -1,10 +1,7 @@
 # Longhorn Helm Chart Values
 defaultSettings:
-  # IMPORTANT: Update this path to match your 4TB SSD mount point
-  # Common options:
-  # - /var/lib/longhorn (default, if you mount 4TB here)
-  # - /mnt/storage/longhorn (if 4TB is mounted at /mnt/storage)
-  # - /data/longhorn (if 4TB is mounted at /data)
+  # IMPORTANT: This path should match your NVMe mount point
+  # Your 3.6TB NVMe (/dev/nvme0n1p1) should be mounted here
   defaultDataPath: /var/lib/longhorn
   
   # Replica count (for single node, set to 1)
