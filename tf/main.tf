@@ -75,3 +75,17 @@ module "ecs_cluster" {
 
   tags = local.tags
 }
+
+# RDS
+# ===
+module "rds" {
+  source = "./modules/rds"
+
+  name                  = local.name
+  org                   = var.org
+  infra_env             = var.infra_env
+  vpc_id                = module.vpc.vpc_id
+  ecs_security_group_id = module.ecs_cluster.security_group_id
+  my_ip                 = var.my_ip
+  public_subnets        = module.vpc.public_subnets
+}

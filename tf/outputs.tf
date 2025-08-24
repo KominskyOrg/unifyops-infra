@@ -70,15 +70,20 @@ output "ecs_log_group_name" {
 
 output "rds_endpoint" {
   description = "The endpoint of the RDS instance"
-  value       = module.db.db_instance_endpoint
+  value       = module.rds.db_instance_endpoint
 }
 
 output "rds_db_name" {
   description = "The database name"
-  value       = module.db.db_instance_name
+  value       = module.rds.db_instance_name
 }
 
-output "db_url_secret_arn" {
-  description = "ARN of the DB URL secret in Secrets Manager"
-  value       = aws_secretsmanager_secret.db_url.arn
+output "rds_instance_address" {
+  description = "The address of the RDS instance"
+  value       = module.rds.db_instance_address
+}
+
+output "rds_instance_port" {
+  description = "The port of the RDS instance"
+  value       = module.rds.db_instance_port
 }
