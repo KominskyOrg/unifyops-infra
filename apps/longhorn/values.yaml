@@ -1,2 +1,32 @@
+# Longhorn Helm Chart Values
 defaultSettings:
+  # IMPORTANT: Update this path to match your 4TB SSD mount point
+  # Common options:
+  # - /var/lib/longhorn (default, if you mount 4TB here)
+  # - /mnt/storage/longhorn (if 4TB is mounted at /mnt/storage)
+  # - /data/longhorn (if 4TB is mounted at /data)
   defaultDataPath: /var/lib/longhorn
+  
+  # Replica count (for single node, set to 1)
+  defaultReplicaCount: 1
+  
+  # Storage over-provisioning percentage
+  storageOverProvisioningPercentage: 100
+  
+  # Storage minimal available percentage
+  storageMinimalAvailablePercentage: 10
+
+persistence:
+  # Default StorageClass settings
+  defaultClass: true
+  defaultClassReplicaCount: 1
+  reclaimPolicy: Delete
+
+# Resource limits for Longhorn components (optional)
+resources:
+  limits:
+    cpu: 500m
+    memory: 500Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
