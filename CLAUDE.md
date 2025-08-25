@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-This is the UnifyOps infrastructure repository containing Terraform configurations for AWS infrastructure and GitOps configurations for Kubernetes deployments. It follows a modular approach with separate environments and service-oriented architecture.
+This is the UnifyOps infrastructure repository containing both Terraform configurations for AWS infrastructure and Kubernetes GitOps configurations for on-premises deployments. The repository has evolved to support a hybrid approach with cloud infrastructure via Terraform and local Kubernetes cluster management via ArgoCD.
 
 ## Key Commands
 
@@ -63,30 +63,49 @@ The repository is organized into distinct functional areas:
   - Uses S3 backend for state management with DynamoDB locking
   - Supports multi-environment deployments (dev/staging/prod)
 
-- **envs/**: GitOps environment configurations using Kustomize
-  - Separate directories for dev, staging, prod, and infra environments
-  - Each environment has overlays for environment-specific customizations
+- **clusters/**: Cluster-specific GitOps configurations
+  - `unifyops-home/bootstrap/`: Root app-of-apps pattern for ArgoCD
+  - `unifyops-home/apps/`: ArgoCD Application definitions for each environment
 
-- **apps/**: Kubernetes application manifests
-  - ArgoCD for GitOps continuous deployment
-  - Demo applications and supporting services
+- **envs/**: Environment-specific Kubernetes resources
+  - Each environment (infra/dev/staging/prod) has its own namespace
+  - Kustomize-based configuration with namespace isolation
+  - Contains namespace definitions and environment-specific overlays
 
-- **clusters/**: Cluster-specific configurations
-  - Bootstrap configurations for cluster initialization
+- **apps/**: Reusable Kubernetes application bases
+  - `argocd/`: ArgoCD ingress and TLS configuration
+  - `cert-manager/`: TLS certificate management
+  - `longhorn/`: Persistent storage system configuration
+  - `metrics-server/`: Cluster metrics collection
+  - Applications use Kustomize for configuration management
+
+- **projects/**: ArgoCD AppProject definitions for RBAC and resource isolation
+  - Separate projects per environment with specific permissions
+  - Controls which repositories and namespaces each project can access
+
+- **argocd/**: ArgoCD repository configurations
+  - Repository secrets for Git and Helm chart access
 
 ### Infrastructure Components
 
+#### AWS Infrastructure (Terraform)
 1. **VPC and Networking**: Module-based VPC with public/private subnets across multiple AZs
 2. **ECS Cluster**: Supports both EC2 and Fargate launch types for containerized workloads
 3. **RDS Database**: PostgreSQL instances with environment-specific configurations
 4. **Security Groups**: Layered security with least-privilege access patterns
 
+#### Kubernetes Infrastructure (GitOps)
+1. **ArgoCD**: GitOps continuous deployment using app-of-apps pattern
+2. **Cert-Manager**: Automated TLS certificate management with self-signed CA
+3. **Longhorn**: Distributed block storage for persistent volumes
+4. **Traefik**: Ingress controller for HTTP/HTTPS routing
+
 ### Key Design Decisions
 
-- **Cost Optimization**: Defaults to AWS Free Tier eligible resources (t2.micro EC2 instances)
-- **Modularity**: Terraform modules for reusable infrastructure components
-- **GitOps**: Kustomize-based deployments for Kubernetes applications
-- **Multi-Repository Pattern**: Infrastructure (this repo) separated from application code (unifyops-core)
+- **GitOps Pattern**: ArgoCD manages all Kubernetes deployments from Git
+- **App-of-Apps**: Root application in `clusters/unifyops-home/bootstrap/root-app.yaml` manages all other apps
+- **Namespace Isolation**: Each environment runs in its own namespace with RBAC controls
+- **Storage Architecture**: Dedicated NVMe storage for Kubernetes persistent volumes via Longhorn
 
 ## Working with Terraform Modules
 
@@ -119,8 +138,67 @@ The repository supports migration from EC2 to ECS containers. Two deployment opt
 
 See ECS_MIGRATION.md for detailed migration steps and cost comparisons.
 
-## Critical Files
+## Kubernetes/GitOps Operations
 
+### Deploying to Kubernetes
+
+The cluster uses ArgoCD for GitOps deployments. To deploy changes:
+
+```bash
+# Push changes to trigger ArgoCD sync
+git push origin main
+
+# Or manually apply ArgoCD applications
+kubectl apply -f clusters/unifyops-home/bootstrap/root-app.yaml
+
+# Check application status
+kubectl get applications -n argocd
+```
+
+### Managing ArgoCD Applications
+
+```bash
+# Access ArgoCD UI
+# URL: http://argocd.local (requires /etc/hosts entry)
+
+# Get admin password
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+
+# CLI operations (requires argocd CLI)
+argocd app list
+argocd app sync <app-name>
+argocd app get <app-name>
+```
+
+### Storage Management
+
+Longhorn provides persistent storage:
+
+```bash
+# Access Longhorn UI
+# URL: http://longhorn.local (requires /etc/hosts entry)
+
+# Fix storage issues
+./scripts/fix-longhorn-storage.sh
+
+# Check storage status
+kubectl get nodes.longhorn.io -n longhorn-system
+```
+
+## Critical Files and Configurations
+
+### Terraform Files
 - `tf/secrets.tfvars`: Contains sensitive variables (not in version control)
 - `tf/plan.tfplan`: Terraform plan output file (generated, not committed)
 - `Makefile`: Primary interface for all Terraform operations
+
+### Kubernetes/GitOps Files
+- `clusters/unifyops-home/bootstrap/root-app.yaml`: Root ArgoCD application (app-of-apps)
+- `apps/longhorn/values.yaml`: Longhorn storage configuration (update path for NVMe mount)
+- `projects/*.yaml`: ArgoCD project definitions with RBAC settings
+
+### Server Configuration
+- **Cluster Location**: SSH accessible at `ssh unifyops`
+- **Node Name**: um790
+- **Storage**: 3.6TB NVMe mounted at `/var/lib/longhorn`
+- **Ingress Domains**: *.local domains pointing to cluster IP
