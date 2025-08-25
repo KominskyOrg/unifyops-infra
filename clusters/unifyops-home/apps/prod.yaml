@@ -8,7 +8,7 @@ spec:
   source:
     repoURL: https://github.com/KominskyOrg/unifyops-infra.git
     targetRevision: main
-    path: envs/app
+    path: unifyops-apps
   destination:
     server: https://kubernetes.default.svc
     namespace: prod
