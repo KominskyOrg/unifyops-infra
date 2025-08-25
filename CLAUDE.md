@@ -68,19 +68,23 @@ The repository is organized into distinct functional areas:
   - `unifyops-home/apps/`: ArgoCD Application definitions for each environment
 
 - **envs/**: Environment-specific Kubernetes resources
-  - Each environment (infra/dev/staging/prod) has its own namespace
-  - Kustomize-based configuration with namespace isolation
-  - Contains namespace definitions and environment-specific overlays
+  - `app/`: Consolidated application configurations for all environments
+    - Base Kustomization shared across branches
+    - `overlays/dev|staging|prod`: Per-environment namespace transformations
+  - `infra/`: Infrastructure components (separate from app deployments)
+  - Uses branch-based environment separation (dev/staging/main branches)
 
 - **apps/**: Reusable Kubernetes application bases
   - `argocd/`: ArgoCD ingress and TLS configuration
   - `cert-manager/`: TLS certificate management
+  - `docker-registry/`: Private container registry with basic auth
   - `longhorn/`: Persistent storage system configuration
   - `metrics-server/`: Cluster metrics collection
   - Applications use Kustomize for configuration management
 
 - **projects/**: ArgoCD AppProject definitions for RBAC and resource isolation
-  - Separate projects per environment with specific permissions
+  - `app.yaml`: Unified project for application deployments across environments
+  - `infra.yaml`: Infrastructure components project
   - Controls which repositories and namespaces each project can access
 
 - **argocd/**: ArgoCD repository configurations
@@ -97,15 +101,18 @@ The repository is organized into distinct functional areas:
 #### Kubernetes Infrastructure (GitOps)
 1. **ArgoCD**: GitOps continuous deployment using app-of-apps pattern
 2. **Cert-Manager**: Automated TLS certificate management with self-signed CA
-3. **Longhorn**: Distributed block storage for persistent volumes
-4. **Traefik**: Ingress controller for HTTP/HTTPS routing
+3. **Docker Registry**: Private container registry with htpasswd authentication (100Gi storage)
+4. **Longhorn**: Distributed block storage for persistent volumes
+5. **Traefik**: Ingress controller for HTTP/HTTPS routing
 
 ### Key Design Decisions
 
 - **GitOps Pattern**: ArgoCD manages all Kubernetes deployments from Git
+- **Branch-Based Environments**: Each Git branch (dev/staging/main) deploys to its respective environment
 - **App-of-Apps**: Root application in `clusters/unifyops-home/bootstrap/root-app.yaml` manages all other apps
 - **Namespace Isolation**: Each environment runs in its own namespace with RBAC controls
 - **Storage Architecture**: Dedicated NVMe storage for Kubernetes persistent volumes via Longhorn
+- **Consolidated Configuration**: Single `envs/app/` directory with Kustomize overlays per environment
 
 ## Working with Terraform Modules
 
@@ -140,16 +147,31 @@ See ECS_MIGRATION.md for detailed migration steps and cost comparisons.
 
 ## Kubernetes/GitOps Operations
 
+### Branch-Based Deployment Workflow
+
+The cluster uses a branch-based GitOps pattern:
+
+- **dev branch** → auto-deploys to dev namespace
+- **staging branch** → auto-deploys to staging namespace
+- **main branch** → requires manual sync to prod namespace
+
 ### Deploying to Kubernetes
 
-The cluster uses ArgoCD for GitOps deployments. To deploy changes:
-
 ```bash
-# Push changes to trigger ArgoCD sync
-git push origin main
+# Development deployment
+git checkout dev
+git push origin dev  # Auto-syncs to dev environment
 
-# Or manually apply ArgoCD applications
-kubectl apply -f clusters/unifyops-home/bootstrap/root-app.yaml
+# Staging promotion
+git checkout staging
+git merge dev
+git push origin staging  # Auto-syncs to staging
+
+# Production deployment
+git checkout main
+git merge staging
+git push origin main
+argocd app sync app-prod  # Manual sync required
 
 # Check application status
 kubectl get applications -n argocd
@@ -185,6 +207,23 @@ Longhorn provides persistent storage:
 kubectl get nodes.longhorn.io -n longhorn-system
 ```
 
+### Container Registry
+
+Docker Registry provides private image storage:
+
+```bash
+# Access registry
+# URL: https://registry.local
+# Auth: admin / changeme123 (update in production)
+
+# Login to registry
+docker login registry.local
+
+# Push images
+docker tag myapp:latest registry.local/myapp:latest
+docker push registry.local/myapp:latest
+```
+
 ## Critical Files and Configurations
 
 ### Terraform Files
@@ -194,8 +233,16 @@ kubectl get nodes.longhorn.io -n longhorn-system
 
 ### Kubernetes/GitOps Files
 - `clusters/unifyops-home/bootstrap/root-app.yaml`: Root ArgoCD application (app-of-apps)
+- `clusters/unifyops-home/apps/*.yaml`: Environment-specific ArgoCD applications
+  - `dev.yaml`: Tracks dev branch → dev namespace
+  - `staging.yaml`: Tracks staging branch → staging namespace
+  - `prod.yaml`: Tracks main branch → prod namespace (manual sync)
+- `envs/app/`: Consolidated application configurations
+  - `overlays/dev|staging|prod/`: Environment-specific Kustomize overlays
+- `apps/docker-registry/`: Private container registry configuration
 - `apps/longhorn/values.yaml`: Longhorn storage configuration (update path for NVMe mount)
-- `projects/*.yaml`: ArgoCD project definitions with RBAC settings
+- `projects/app.yaml`: Unified ArgoCD project for applications
+- `GITOPS-WORKFLOW.md`: Complete GitOps workflow documentation
 
 ### Server Configuration
 - **Cluster Location**: SSH accessible at `ssh unifyops`
