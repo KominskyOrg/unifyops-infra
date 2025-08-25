@@ -1,14 +1,14 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: env-dev
+  name: app-dev
   namespace: argocd
 spec:
-  project: dev
+  project: app
   source:
     repoURL: https://github.com/KominskyOrg/unifyops-infra.git
-    targetRevision: main
-    path: envs/dev
+    targetRevision: dev
+    path: envs/app/overlays/dev
   destination:
     server: https://kubernetes.default.svc
     namespace: dev

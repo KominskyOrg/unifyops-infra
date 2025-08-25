@@ -1,14 +1,14 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: env-staging
+  name: app-staging
   namespace: argocd
 spec:
-  project: staging
+  project: app
   source:
     repoURL: https://github.com/KominskyOrg/unifyops-infra.git
-    targetRevision: main
-    path: envs/staging
+    targetRevision: staging
+    path: envs/app/overlays/staging
   destination:
     server: https://kubernetes.default.svc
     namespace: staging

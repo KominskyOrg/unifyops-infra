@@ -1,17 +1,16 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: env-prod
+  name: app-prod
   namespace: argocd
 spec:
-  project: prod
+  project: app
   source:
     repoURL: https://github.com/KominskyOrg/unifyops-infra.git
     targetRevision: main
-    path: envs/prod
+    path: envs/app/overlays/prod
   destination:
     server: https://kubernetes.default.svc
     namespace: prod
   syncPolicy:
-    automated: { prune: true, selfHeal: true }
     syncOptions: [CreateNamespace=true]
