@@ -8,7 +8,7 @@ spec:
   source:
     repoURL: https://github.com/KominskyOrg/unifyops-infra.git
     targetRevision: staging
-    path: envs/app/overlays/staging
+    path: envs/app
   destination:
     server: https://kubernetes.default.svc
     namespace: staging
