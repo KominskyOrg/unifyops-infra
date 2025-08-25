@@ -8,6 +8,8 @@ spec:
   sourceRepos:
   - https://github.com/KominskyOrg/unifyops-infra.git
   destinations:
+  - namespace: app
+    server: https://kubernetes.default.svc
   - namespace: dev
     server: https://kubernetes.default.svc
   - namespace: staging
