@@ -11,6 +11,7 @@ spec:
     - https://charts.longhorn.io
     - https://github.com/cert-manager/cert-manager/releases/download/v1.16.2/cert-manager.yaml
     - https://github.com/kubernetes-sigs/metrics-server
+    - https://helm.goharbor.io
   destinations:
     - namespace: infra
       server: https://kubernetes.default.svc
