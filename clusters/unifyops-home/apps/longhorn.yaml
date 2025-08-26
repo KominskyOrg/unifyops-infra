@@ -19,20 +19,20 @@ spec:
           defaultClass: true
           defaultFsType: ext4
       # (keep skipCrds: false so Argo manages CRDs)
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: longhorn-system
   ignoreDifferences:
     - group: apiextensions.k8s.io
       kind: CustomResourceDefinition
       jsonPointers:
-        # mutated by controller-gen / server
         - /metadata/annotations
-        # mutated by the conversion webhook injector
         - /spec/conversion/webhook/clientConfig/caBundle
-        # schemas often normalized/expanded by apiserver
         - /spec/versions
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
-      - ServerSideApply=true     # CRDs can be huge; SSA avoids diff churn
+      - ServerSideApply=true
       - RespectIgnoreDifferences=true
