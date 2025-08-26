@@ -13,8 +13,11 @@ spec:
       values: |
         defaultSettings:
           defaultReplicaCount: 1
-          createDefaultDiskLabeledNodes: true
-          defaultDataPath: /var/lib/longhorn/data
+          createDefaultDiskLabeledNodes: false
+          defaultDataPath: /var/lib/longhorn
+        persistence:
+          defaultClass: true
+          defaultFsType: ext4
       # (keep skipCrds: false so Argo manages CRDs)
   ignoreDifferences:
     - group: apiextensions.k8s.io
