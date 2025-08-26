@@ -15,10 +15,21 @@ spec:
           defaultReplicaCount: 1
           createDefaultDiskLabeledNodes: true
           defaultDataPath: /var/lib/longhorn/data
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: longhorn-system
+      # (keep skipCrds: false so Argo manages CRDs)
+  ignoreDifferences:
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+      jsonPointers:
+        # mutated by controller-gen / server
+        - /metadata/annotations
+        # mutated by the conversion webhook injector
+        - /spec/conversion/webhook/clientConfig/caBundle
+        # schemas often normalized/expanded by apiserver
+        - /spec/versions
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - ServerSideApply=true     # CRDs can be huge; SSA avoids diff churn
+      - RespectIgnoreDifferences=true
