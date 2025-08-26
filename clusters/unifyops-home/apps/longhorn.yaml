@@ -18,6 +18,7 @@ spec:
         persistence:
           defaultClass: true
           defaultFsType: ext4
+          defaultClassReplicaCount: 1
       # (keep skipCrds: false so Argo manages CRDs)
   destination:
     server: https://kubernetes.default.svc
