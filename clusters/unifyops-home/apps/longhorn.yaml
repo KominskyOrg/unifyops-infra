@@ -10,22 +10,14 @@ spec:
     chart: longhorn
     targetRevision: 1.7.2
     helm:
-      releaseName: longhorn
-      valueFiles:
-        - https://raw.githubusercontent.com/KominskyOrg/unifyops-infra/main/apps/longhorn/values.yaml
+      values: |
+        defaultSettings:
+          defaultReplicaCount: 1
+          createDefaultDiskLabeledNodes: true
   destination:
     server: https://kubernetes.default.svc
     namespace: longhorn-system
   syncPolicy:
-    automated: 
+    automated:
       prune: true
       selfHeal: true
-    syncOptions: 
-      - CreateNamespace=true
-      - ServerSideApply=true
-    retry:
-      limit: 5
-      backoff:
-        duration: 5s
-        factor: 2
-        maxDuration: 3m

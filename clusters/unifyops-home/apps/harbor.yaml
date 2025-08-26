@@ -3,34 +3,47 @@ kind: Application
 metadata:
   name: harbor
   namespace: argocd
-  finalizers:
-    - resources-finalizer.argocd.argoproj.io
 spec:
   project: infra
-  sources:
-    - repoURL: https://helm.goharbor.io
-      chart: harbor
-      targetRevision: 1.15.1
-      helm:
-        valueFiles:
-          - $values/apps/harbor/values/values.pvc.yaml
-    - repoURL: https://github.com/KominskyOrg/unifyops-infra
-      targetRevision: main
-      ref: values
+  source:
+    repoURL: https://helm.goharbor.io
+    chart: harbor
+    targetRevision: 1.16.0
+    helm:
+      values: |
+        expose:
+          type: ingress
+          tls:
+            enabled: true
+            certSource: secret
+            secret:
+              secretName: harbor-tls
+          ingress:
+            hosts:
+              core: harbor.unifyops.io
+        chartmuseum:
+          enabled: false
+        notary:
+          enabled: false
+        trivy:
+          enabled: false
+        persistence:
+          enabled: true
+          persistentVolumeClaim:
+            registry:
+              storageClass: longhorn
+            database:
+              storageClass: longhorn
+            redis:
+              storageClass: longhorn
+            jobservice:
+              storageClass: longhorn
+            trivy:
+              storageClass: longhorn
   destination:
     server: https://kubernetes.default.svc
-    namespace: harbor
+    namespace: harbor-system
   syncPolicy:
     automated:
-      prune: false  # Set to false initially for safety
+      prune: true
       selfHeal: true
-    syncOptions:
-      - CreateNamespace=true
-      - ServerSideApply=true
-    retry:
-      limit: 5
-      backoff:
-        duration: 5s
-        factor: 2
-        maxDuration: 3m
-  revisionHistoryLimit: 10

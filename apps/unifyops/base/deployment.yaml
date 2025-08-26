@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: unifyops
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: unifyops
+  template:
+    metadata:
+      labels:
+        app: unifyops
+    spec:
+      containers:
+        - name: app
+          image: ghcr.io/KominskyOrg/unifyops:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - name: ENV
+              value: "base"
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits: { cpu: "500m", memory: "512Mi" }

@@ -1,0 +1,28 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: unifyops
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - { name: unifyops-dev,     branch: dev,     overlay: dev,     namespace: uo-dev }
+          - { name: unifyops-staging, branch: staging, overlay: staging, namespace: uo-staging }
+          - { name: unifyops-prod,    branch: main,    overlay: prod,    namespace: uo-prod }
+  template:
+    metadata:
+      name: '{{name}}'
+    spec:
+      project: apps
+      source:
+        repoURL: https://github.com/KominskyOrg/unifyops.git
+        targetRevision: '{{branch}}'
+        path: apps/unifyops/overlays/{{overlay}}
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true

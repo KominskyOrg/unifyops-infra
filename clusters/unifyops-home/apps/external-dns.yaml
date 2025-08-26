@@ -1,0 +1,29 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: external-dns
+  namespace: argocd
+spec:
+  project: infra
+  source:
+    repoURL: https://kubernetes-sigs.github.io/external-dns/
+    chart: external-dns
+      targetRevision: 1.15.1
+    helm:
+      values: |
+        provider: aws
+        policy: upsert-only
+        registry: txt
+        txtOwnerId: unifyops-home
+        domainFilters:
+          - unifyops.io
+        serviceAccount:
+          annotations:
+            eks.amazonaws.com/role-arn: REPLACE_ME_OPTIONAL_IAM_ROLE_ARN
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: external-dns
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

@@ -1,0 +1,22 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: unifyops
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-dns
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts: ["api.staging.unifyops.io"]
+      secretName: unifyops-staging-tls
+  rules:
+    - host: api.staging.unifyops.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: unifyops
+                port:
+                  number: 80
