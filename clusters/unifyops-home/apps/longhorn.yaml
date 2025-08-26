@@ -14,6 +14,7 @@ spec:
         defaultSettings:
           defaultReplicaCount: 1
           createDefaultDiskLabeledNodes: true
+          defaultDataPath: /var/lib/longhorn/data
   destination:
     server: https://kubernetes.default.svc
     namespace: longhorn-system
