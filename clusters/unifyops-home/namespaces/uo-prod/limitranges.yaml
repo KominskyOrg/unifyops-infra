@@ -1,8 +1,8 @@
 apiVersion: v1
 kind: LimitRange
 metadata:
-name: defaults
-namespace: uo-prod
+  name: defaults
+  namespace: uo-prod
 spec:
   limits:
     - type: Container
