@@ -22,3 +22,5 @@ resources:
   - harbor/
   - longhorn/
   - metrics-server/
+  - metallb/
+  - tailscale/

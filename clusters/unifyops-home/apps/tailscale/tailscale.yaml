@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tailscale-operator
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"     # after MetalLB/Traefik svc config
+spec:
+  project: infra
+  source:
+    repoURL: https://github.com/KominskyOrg/unifyops-infra.git
+    targetRevision: HEAD
+    path: clusters/unifyops-home/apps/tailscale
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: tailscale
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
