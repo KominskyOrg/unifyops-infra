@@ -1,12 +1,24 @@
+# clusters/unifyops-home/apps/kustomization.yaml
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
+
+# Optional but handy for traceability
+commonLabels:
+  cluster: unifyops-home
+
 resources:
-  - projects.yaml
+  # Core scaffolding
   - namespaces.yaml
-  - cert-manager.yaml
-  - longhorn.yaml
-  - longhorn-ingress.yaml
-  - harbor.yaml
-  - metrics-server.yaml
-  - external-dns.yaml
+  - projects.yaml
+
+  # If you have an ArgoCD App-of-Apps or root Applications
+  - root-apps.yaml
   - appset-unifyops.yaml
+
+  # Each subdir has its own kustomization.yaml
+  - argocd/
+  - cert-manager/
+  - external-dns/
+  - harbor/
+  - longhorn/
+  - metrics-server/
