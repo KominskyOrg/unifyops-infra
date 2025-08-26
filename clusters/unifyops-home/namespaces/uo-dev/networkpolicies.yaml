@@ -30,9 +30,9 @@ spec:
   podSelector: {}
   ingress:
     - from:
-      - namespaceSelector:
-        matchLabels:
-          kube-system: "true"
-    - namespaceSelector:
-        matchLabels:
-          name: ingress
+        - namespaceSelector:
+            matchLabels:
+              kube-system: "true" # adjust if your ingress runs elsewhere
+        - namespaceSelector:
+            matchLabels:
+              name: ingress # if you dedicate an ingress ns
