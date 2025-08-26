@@ -5,7 +5,9 @@ kind: Kustomization
 # Optional but handy for traceability
 labels:
   - pairs:
-    - cluster: unifyops-home
+      cluster: unifyops-home
+    includeSelectors: true
+    includeTemplates: true
 
 resources:
   # Core scaffolding
