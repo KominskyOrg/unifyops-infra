@@ -21,17 +21,15 @@ spec:
           image: ghcr.io/tailscale/k8s-operator:latest
           imagePullPolicy: IfNotPresent
           env:
-            - name: TS_KUBE_SECRET
-              value: operator-oauth
+            - name: CLIENT_ID_FILE
+              value: /secrets/client_id
+            - name: CLIENT_SECRET_FILE
+              value: /secrets/client_secret
             - name: TS_LOGS
               value: "true"
           resources:
-            requests:
-              cpu: 100m
-              memory: 100Mi
-            limits:
-              cpu: 500m
-              memory: 500Mi
+            requests: { cpu: 100m, memory: 100Mi }
+            limits:   { cpu: 500m, memory: 500Mi }
           livenessProbe:
             httpGet: { path: /healthz, port: 8080 }
             initialDelaySeconds: 10
@@ -40,7 +38,14 @@ spec:
             httpGet: { path: /readyz, port: 8080 }
             initialDelaySeconds: 5
             periodSeconds: 10
-      # (optional hardening)
+          volumeMounts:
+            - name: oauth
+              mountPath: /secrets
+              readOnly: true
+      volumes:
+        - name: oauth
+          secret:
+            secretName: tailscale-oauth
       securityContext:
         runAsNonRoot: true
         runAsUser: 65534
