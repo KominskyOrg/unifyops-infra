@@ -14,14 +14,31 @@ spec:
     targetRevision: "1.86.5"
     helm:
       values: |
-        oauthSecretVolume:
+        installCRDs: true
+        oauth: {}
+        operatorConfig:
+          image:
+            repository: tailscale/k8s-operator
+            tag: v1.86.5
+            pullPolicy: IfNotPresent
+          defaultTags:
+            - "tag:k8s-operator"
+          logging: "info"
+          extraEnv:
+            - name: XDG_CONFIG_HOME
+              value: /tmp
+        ingressClass:
           enabled: true
-          secretName: tailscale-oauth
-          mountPath: /oauth
-
-        extraEnv:
-          - name: XDG_CONFIG_HOME
-            value: /tmp
+          name: tailscale
+        proxyConfig:
+          image:
+            repository: tailscale/tailscale
+            tag: v1.86.5
+          defaultTags: "tag:k8s"
+          firewallMode: auto
+        apiServerProxyConfig:
+          allowImpersonation: "false"
+          mode: "false"
   syncPolicy:
     automated:
       prune: true
