@@ -15,6 +15,7 @@ spec:
     helm:
       values: |
         oauthSecretVolume:
+          enabled: true
           secretName: tailscale-oauth
           mountPath: /oauth
 
