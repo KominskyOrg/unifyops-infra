@@ -12,6 +12,8 @@ spec:
     - 'https://helm.goharbor.io'
     - 'https://kubernetes-sigs.github.io/metrics-server/'
     - 'https://kubernetes-sigs.github.io/external-dns/'
+    - 'https://metallb.github.io/metallb'
+    - 'https://github.com/tailscale/tailscale-operator'
   destinations:
     - namespace: '*'
       server: https://kubernetes.default.svc
