@@ -15,7 +15,11 @@ spec:
     helm:
       values: |
         installCRDs: true
-        oauth: {}
+        oauthSecretVolume:
+          enabled: true
+          secretName: tailscale-oauth
+          mountPath: /oauth
+
         operatorConfig:
           image:
             repository: tailscale/k8s-operator
