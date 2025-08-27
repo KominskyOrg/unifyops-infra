@@ -14,18 +14,15 @@ spec:
         app: tailscale-operator
     spec:
       serviceAccountName: tailscale-operator
-      # Option B if you skip SA-level pullSecret:
-      # imagePullSecrets:
-      #   - name: ghcr-creds
+      imagePullSecrets:
+        - name: ghcr-creds
       containers:
         - name: operator
-          # If GHCR is flaky for anonymous pulls, keep the pullSecret, or switch to Docker Hub:
           image: ghcr.io/tailscale/tailscale-operator:latest
-          # image: tailscale/k8s-operator:latest
           imagePullPolicy: IfNotPresent
           env:
             - name: TS_KUBE_SECRET
-              value: operator-oauth          # Secret that holds TS_AUTHKEY
+              value: operator-oauth
             - name: TS_LOGS
               value: "true"
           resources:
@@ -35,7 +32,6 @@ spec:
             limits:
               cpu: 500m
               memory: 500Mi
-          # (optional but nice)
           livenessProbe:
             httpGet: { path: /healthz, port: 8080 }
             initialDelaySeconds: 10
