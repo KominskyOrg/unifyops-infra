@@ -4,13 +4,13 @@ metadata:
   name: tailscale-operator
   namespace: argocd
   annotations:
-    argocd.argoproj.io/sync-wave: "1"     # after MetalLB/Traefik svc config
+    argocd.argoproj.io/sync-wave: "1"
 spec:
   project: infra
   source:
     repoURL: https://github.com/KominskyOrg/unifyops-infra.git
     targetRevision: HEAD
-    path: clusters/unifyops-home/apps/tailscale
+    path: clusters/unifyops-home/apps/tailscale/operator
   destination:
     server: https://kubernetes.default.svc
     namespace: tailscale
@@ -18,3 +18,5 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

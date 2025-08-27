@@ -38,6 +38,8 @@ kind: ServiceAccount
 metadata:
   name: tailscale-operator
   namespace: tailscale
+imagePullSecrets:
+  - name: ghcr-creds
 ---
 # Minimal RBAC just for operator needs (trimmed; expand if you lock this down later)
 apiVersion: rbac.authorization.k8s.io/v1

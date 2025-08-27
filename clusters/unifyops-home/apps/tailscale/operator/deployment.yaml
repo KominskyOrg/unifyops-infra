@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tailscale-operator
+  namespace: tailscale
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tailscale-operator
+  template:
+    metadata:
+      labels:
+        app: tailscale-operator
+    spec:
+      serviceAccountName: tailscale-operator
+      # Option B if you skip SA-level pullSecret:
+      # imagePullSecrets:
+      #   - name: ghcr-creds
+      containers:
+        - name: operator
+          # If GHCR is flaky for anonymous pulls, keep the pullSecret, or switch to Docker Hub:
+          image: ghcr.io/tailscale/tailscale-operator:latest
+          # image: tailscale/k8s-operator:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: TS_KUBE_SECRET
+              value: operator-oauth          # Secret that holds TS_AUTHKEY
+            - name: TS_LOGS
+              value: "true"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 100Mi
+            limits:
+              cpu: 500m
+              memory: 500Mi
+          # (optional but nice)
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet: { path: /readyz, port: 8080 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      # (optional hardening)
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
