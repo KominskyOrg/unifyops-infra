@@ -15,7 +15,7 @@ spec:
         skipCrds: false             # be explicit: install CRDs from the chart
     - repoURL: https://github.com/KominskyOrg/unifyops-infra.git
       targetRevision: HEAD
-      path: clusters/unifyops-home/apps/metallb/config   # <- your IPPool/L2Adv here
+      path: clusters/unifyops-home/apps/metallb/config
   destination:
     server: https://kubernetes.default.svc
     namespace: metallb-system
