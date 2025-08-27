@@ -3,17 +3,31 @@ kind: Application
 metadata:
   name: tailscale-operator
   namespace: argocd
-  annotations:
-    argocd.argoproj.io/sync-wave: "1"
 spec:
   project: infra
-  source:
-    repoURL: https://github.com/KominskyOrg/unifyops-infra.git
-    targetRevision: main
-    path: clusters/unifyops-home/apps/tailscale/operator
   destination:
     server: https://kubernetes.default.svc
     namespace: tailscale
+  source:
+    repoURL: https://pkgs.tailscale.com/helmcharts
+    chart: tailscale-operator
+    targetRevision: "1.86.5"   # pin what you're running now; bump later as needed
+    helm:
+      values: |
+        # EITHER: let the chart create the Secret (fastest)
+        # oauth:
+        #   clientId: "<YOUR_CLIENT_ID>"
+        #   clientSecret: "<YOUR_CLIENT_SECRET>"
+
+        # (Optional) If you prefer to use the Secret you already created instead,
+        # comment the block above and uncomment the block below.
+        oauthSecretVolume:
+          secretName: tailscale-oauth
+
+        # Keep our earlier tsnet fix (writable config dir)
+        extraEnv:
+          - name: XDG_CONFIG_HOME
+            value: /tmp
   syncPolicy:
     automated:
       prune: true
