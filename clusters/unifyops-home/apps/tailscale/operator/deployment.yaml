@@ -18,7 +18,7 @@ spec:
         - name: ghcr-creds
       containers:
         - name: operator
-          image: ghcr.io/tailscale/tailscale-operator:latest
+          image: ghcr.io/tailscale/k8s-operator:latest
           imagePullPolicy: IfNotPresent
           env:
             - name: TS_KUBE_SECRET
