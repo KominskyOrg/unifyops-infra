@@ -5,6 +5,7 @@ resources:
   - serviceaccount.yaml
   - rbac.yaml
   - deployment.yaml
+  - path-xdg.yaml
 commonLabels:
   app.kubernetes.io/name: tailscale-operator
   app.kubernetes.io/part-of: tailscale
