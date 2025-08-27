@@ -4,7 +4,8 @@ metadata:
   name: metallb-config
   namespace: argocd
   annotations:
-    argocd.argoproj.io/sync-wave: "1"   # apply after controller is up
+    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
   project: infra
   source:
@@ -15,6 +16,10 @@ spec:
     server: https://kubernetes.default.svc
     namespace: metallb-system
   syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
+    automated: { prune: true, selfHeal: true }
+    retry:
+      limit: 6
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

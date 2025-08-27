@@ -1,0 +1,27 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: metallb
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: infra
+  sources:
+    - repoURL: https://metallb.github.io/metallb
+      chart: metallb
+      targetRevision: 0.15.2        # or current stable
+      helm:
+        skipCrds: false             # be explicit: install CRDs from the chart
+    - repoURL: https://github.com/KominskyOrg/unifyops-infra.git
+      targetRevision: HEAD
+      path: clusters/unifyops-home/apps/metallb/config   # <- your IPPool/L2Adv here
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: metallb-system
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - SkipDryRunOnMissingResource=true  # belts & suspenders
