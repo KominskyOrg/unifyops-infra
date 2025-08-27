@@ -14,7 +14,7 @@ spec:
       helm:
         skipCrds: false             # be explicit: install CRDs from the chart
     - repoURL: https://github.com/KominskyOrg/unifyops-infra.git
-      targetRevision: HEAD
+      targetRevision: main
       path: clusters/unifyops-home/apps/metallb/config
   destination:
     server: https://kubernetes.default.svc
