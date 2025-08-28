@@ -27,3 +27,4 @@ resources:
   - metrics-server/
   - metallb/
   - tailscale/
+  - sealed-secret/
