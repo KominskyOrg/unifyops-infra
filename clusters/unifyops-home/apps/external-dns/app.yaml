@@ -17,12 +17,22 @@ spec:
         txtOwnerId: unifyops-home
         domainFilters:
           - unifyops.io
-        serviceAccount:
-          annotations:
-            eks.amazonaws.com/role-arn: REPLACE_ME_OPTIONAL_IAM_ROLE_ARN
+        env:
+          - name: AWS_REGION
+            value: us-east-1
+          - name: AWS_ACCESS_KEY_ID
+            valueFrom:
+              secretKeyRef:
+                name: externaldns-aws
+                key: aws_access_key_id
+          - name: AWS_SECRET_ACCESS_KEY
+            valueFrom:
+              secretKeyRef:
+                name: externaldns-aws
+                key: aws_secret_access_key
   destination:
     server: https://kubernetes.default.svc
-    namespace: external-dns
+    namespace: uo-infra
   syncPolicy:
     automated:
       prune: true
