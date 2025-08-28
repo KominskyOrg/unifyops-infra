@@ -11,13 +11,11 @@ spec:
     - 'https://helm.goharbor.io'
     - 'https://kubernetes-sigs.github.io/metrics-server/'
     - 'https://kubernetes-sigs.github.io/external-dns/'
-    # Metallb (both forms + wildcard)
     - 'https://metallb.github.io/metallb'
     - 'https://metallb.github.io/metallb/'
-    - 'https://metallb.github.io/*'
-    # Tailscale (use the actual Helm repo; add OCI if you use it)
     - 'https://pkgs.tailscale.com/helmcharts'
     - 'oci://ghcr.io/*'
+    - 'https://bitnami-labs.github.io/sealed-secrets'
   destinations:
     - namespace: '*'
       server: https://kubernetes.default.svc
