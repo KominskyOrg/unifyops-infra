@@ -3,7 +3,7 @@ kind: Ingress
 metadata:
   name: unifyops
   annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-dns
+    cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
   ingressClassName: nginx-private
   tls:

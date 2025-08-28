@@ -19,9 +19,9 @@ metadata:
     traefik.ingress.kubernetes.io/router.entrypoints: web
     traefik.ingress.kubernetes.io/router.middlewares: argocd-https-redirect@kubernetescrd
 spec:
-  ingressClassName: traefik
+  ingressClassName: nginx-private
   rules:
-    - host: argocd.local
+    - host: argocd.unifyops.io
       http:
         paths:
           - path: /
@@ -42,12 +42,12 @@ metadata:
     cert-manager.io/cluster-issuer: ca-issuer
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
 spec:
-  ingressClassName: traefik
+  ingressClassName: nginx-private
   tls:
-    - hosts: ["argocd.local"]
+    - hosts: ["argocd.unifyops.io"]
       secretName: argocd-tls
   rules:
-    - host: argocd.local
+    - host: argocd.unifyops.io
       http:
         paths:
           - path: /

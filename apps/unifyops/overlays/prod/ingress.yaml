@@ -14,7 +14,7 @@ spec:
       - path: /
         pathType: Prefix
         backend:
-          service: { name: <your-prod-service>, port: { number: 80 } }
+          service: { name: uo-prod, port: { number: 80 } }
   tls:
   - secretName: unifyops-io
     hosts: ["unifyops.io"]

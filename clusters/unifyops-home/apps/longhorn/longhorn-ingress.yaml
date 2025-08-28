@@ -19,9 +19,9 @@ metadata:
     traefik.ingress.kubernetes.io/router.entrypoints: web
     traefik.ingress.kubernetes.io/router.middlewares: longhorn-https-redirect@kubernetescrd
 spec:
-  ingressClassName: traefik
+  ingressClassName: nginx-private
   rules:
-    - host: longhorn.local
+    - host: longhorn.unifyops.io
       http:
         paths:
           - path: /
@@ -42,12 +42,12 @@ metadata:
     cert-manager.io/cluster-issuer: ca-issuer
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
 spec:
-  ingressClassName: traefik
+  ingressClassName: nginx-private
   tls:
-    - hosts: ["longhorn.local"]
+    - hosts: ["longhorn.unifyops.io"]
       secretName: longhorn-tls
   rules:
-    - host: longhorn.local
+    - host: longhorn.unifyops.io
       http:
         paths:
           - path: /
