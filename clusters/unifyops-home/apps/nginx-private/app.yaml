@@ -1,0 +1,27 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: nginx-private
+  namespace: argocd
+spec:
+  project: infra
+  destination: { server: https://kubernetes.default.svc, namespace: nginx-private }
+  source:
+    repoURL: https://kubernetes.github.io/ingress-nginx
+    chart: ingress-nginx
+    targetRevision: 4.11.2
+    helm:
+      values: |
+        controller:
+          ingressClassResource:
+            name: nginx-private
+            controllerValue: k8s.io/ingress-nginx
+            default: false
+          watchIngressWithoutClass: false
+          service:
+            type: LoadBalancer
+            loadBalancerClass: tailscale
+          config:
+            ssl-redirect: "true"
+          metrics.enabled: true
+  syncPolicy: { automated: { prune: true, selfHeal: true }, syncOptions: ["CreateNamespace=true"] }

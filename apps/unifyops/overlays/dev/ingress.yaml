@@ -5,12 +5,12 @@ metadata:
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-dns
 spec:
-  ingressClassName: traefik
+  ingressClassName: nginx-private
   tls:
-    - hosts: ["api.dev.unifyops.io"]
+    - hosts: ["dev.unifyops.io"]
       secretName: unifyops-dev-tls
   rules:
-    - host: api.dev.unifyops.io
+    - host: dev.unifyops.io
       http:
         paths:
           - path: /

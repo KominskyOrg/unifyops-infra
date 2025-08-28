@@ -1,22 +1,20 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: unifyops
+  name: uo-prod
+  namespace: uo-prod
   annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-dns
+    cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
-  ingressClassName: traefik
-  tls:
-    - hosts: ["api.unifyops.io"]
-      secretName: unifyops-prod-tls
+  ingressClassName: nginx-private
   rules:
-    - host: api.unifyops.io
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: unifyops
-                port:
-                  number: 80
+  - host: unifyops.io
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service: { name: <your-prod-service>, port: { number: 80 } }
+  tls:
+  - secretName: unifyops-io
+    hosts: ["unifyops.io"]

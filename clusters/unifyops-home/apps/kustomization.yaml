@@ -28,3 +28,4 @@ resources:
   - metallb/
   - tailscale/
   - sealed-secret/
+  - nginx-private/

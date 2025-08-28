@@ -3,12 +3,16 @@ kind: Application
 metadata:
   name: harbor
   namespace: argocd
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    external-dns.alpha.kubernetes.io/hostname: harbor.unifyops.io
 spec:
   project: infra
   source:
     repoURL: https://helm.goharbor.io
     chart: harbor
     targetRevision: 1.16.0
+    ingressClassName: nginx-private
     helm:
       values: |
         expose:

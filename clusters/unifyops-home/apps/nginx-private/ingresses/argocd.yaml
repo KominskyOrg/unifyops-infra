@@ -1,0 +1,21 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: argocd-private
+  namespace: argocd
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    external-dns.alpha.kubernetes.io/hostname: argocd.unifyops.io
+spec:
+  ingressClassName: nginx-private
+  rules:
+  - host: argocd.unifyops.io
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service: { name: argocd-server, port: { number: 80 } }
+  tls:
+  - secretName: argocd-unifyops-io
+    hosts: ["argocd.unifyops.io"]
