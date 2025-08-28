@@ -20,3 +20,4 @@ resources:
   - uo-infra/cert-manager.yaml
   - uo-infra/external-dns.yaml
   - uo-infra/harbor-system.yaml
+  - uo-infra/uo-infra.yaml
