@@ -1,67 +1,45 @@
-# Force single-process Loki (no object store)
+
 deploymentMode: SingleBinary
 
-# Disable all distributed components explicitly (belt + suspenders)
-read:
-  enabled: false
-write:
-  enabled: false
-backend:
-  enabled: false
-gateway:
-  enabled: false
-resultsCache:
-  enabled: false
-chunksCache:
-  enabled: false
-
-# Loki core settings
 loki:
   auth_enabled: false
-  server:
-    http_listen_port: 3100
 
-  # Define storage type and bucket names (required for newer chart versions)
+  commonConfig:
+    replication_factor: 1
+    path_prefix: /var/loki
+
   storage:
-    type: filesystem
-    filesystem:
-      chunks_directory: /var/loki/chunks
-      rules_directory: /var/loki/rules
     bucketNames:
       chunks: chunks
       ruler: ruler
       admin: admin
 
-  # --- STORAGE: local filesystem (PVC) ---
-  # TSDB/boltdb-shipper on local disk
-  storage_config:
-    filesystem:
-      directory: /var/loki/chunks
-    boltdb_shipper:
-      active_index_directory: /var/loki/index
-      cache_location: /var/loki/index_cache
-      shared_store: filesystem
-
-  # Schema for TSDB (works fine for homelab)
-  schema_config:
+  schemaConfig:
     configs:
       - from: "2024-01-01"
-        store: tsdb
+        store: boltdb-shipper
         object_store: filesystem
-        schema: v13
+        schema: v12
         index:
           prefix: loki_index_
           period: 24h
 
-# SingleBinary pod + PVC
 singleBinary:
+  enabled: true
   replicas: 1
   persistence:
     enabled: true
-    size: 20Gi
+    size: 40Gi
     storageClass: longhorn
 
-# Service named "loki" on port 3100
-service:
-  ports:
-    http: 3100
+# Turn off the chart's self-monitoring/agent CRs (you already run Alloy separately)
+monitoring:
+  selfMonitoring:
+    enabled: false
+  grafanaAgent:
+    enabled: false
+    installOperator: false
+
+# Disable Helm test pod
+test:
+  enabled: false
