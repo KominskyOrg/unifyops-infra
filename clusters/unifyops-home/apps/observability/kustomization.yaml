@@ -8,4 +8,4 @@ resources:
   - alloy-gateway/app.yaml
   - blackbox-exporter/app.yaml
   - prom-addons/app.yaml
-  - grafana-crds/
+  - grafana-crds/crds-all.yaml
