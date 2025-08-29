@@ -1,21 +1,20 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: argocd-private
+  name: argocd
   namespace: argocd
   annotations:
-    # issue LE cert via DNS-01
-    cert-manager.io/cluster-issuer: letsencrypt-prod
-    # publish DNS
-    external-dns.alpha.kubernetes.io/hostname: argocd.unifyops.io
-    # nginx: force HTTP -> HTTPS redirect
+    # force 80 -> 443
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # cert-manager DNS-01 via Route53
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    # publish DNS (ExternalDNS)
+    external-dns.alpha.kubernetes.io/hostname: argocd.unifyops.io
 spec:
   ingressClassName: nginx-private
   tls:
   - secretName: argocd-unifyops-io
-    hosts:
-      - argocd.unifyops.io
+    hosts: ["argocd.unifyops.io"]
   rules:
   - host: argocd.unifyops.io
     http:
@@ -24,6 +23,6 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: argocd-server
+            name: argocd-server   # default svc from Argo CD install
             port:
-              number: 80
+              number: 80          # the HTTP port on the service
