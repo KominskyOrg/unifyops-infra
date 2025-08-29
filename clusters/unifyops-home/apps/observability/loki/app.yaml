@@ -28,6 +28,9 @@ spec:
           server:
             http_listen_port: 3100
           
+          # Explicitly disable commonConfig to avoid storage bucket issues
+          commonConfig: false
+          
           # Define storage type and bucket names (required for newer chart versions)
           storage:
             type: filesystem
@@ -35,9 +38,9 @@ spec:
               chunks_directory: /var/loki/chunks
               rules_directory: /var/loki/rules
             bucketNames:
-              chunks: chunks
-              ruler: ruler
-              admin: admin
+              chunks: filesystem
+              ruler: filesystem
+              admin: filesystem
           
           storage_config:
             filesystem:
