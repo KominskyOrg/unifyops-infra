@@ -1,48 +1,21 @@
-# middleware: http -> https
-apiVersion: traefik.io/v1alpha1
-kind: Middleware
-metadata:
-  name: https-redirect
-  namespace: argocd
-spec:
-  redirectScheme:
-    scheme: https
-    permanent: true
----
-# HTTP ingress (only entrypoint web) that redirects to HTTPS
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: argocd-http
-  namespace: argocd
-  annotations:
-    traefik.ingress.kubernetes.io/router.entrypoints: web
-    traefik.ingress.kubernetes.io/router.middlewares: argocd-https-redirect@kubernetescrd
-spec:
-  ingressClassName: nginx-private
-  rules:
-    - host: argocd.unifyops.io
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: argocd-server
-                port:
-                  number: 80
----
-# HTTPS ingress (only entrypoint websecure) that serves the UI
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: argocd-private
   namespace: argocd
   annotations:
+    # issue LE cert via DNS-01
     cert-manager.io/cluster-issuer: letsencrypt-prod
+    # publish DNS
     external-dns.alpha.kubernetes.io/hostname: argocd.unifyops.io
+    # nginx: force HTTP -> HTTPS redirect
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
 spec:
   ingressClassName: nginx-private
+  tls:
+  - secretName: argocd-unifyops-io
+    hosts:
+      - argocd.unifyops.io
   rules:
   - host: argocd.unifyops.io
     http:
@@ -50,7 +23,7 @@ spec:
       - path: /
         pathType: Prefix
         backend:
-          service: { name: argocd-server, port: { number: 80 } }
-  tls:
-  - secretName: argocd-unifyops-io
-    hosts: [argocd.unifyops.io]
+          service:
+            name: argocd-server
+            port:
+              number: 80
