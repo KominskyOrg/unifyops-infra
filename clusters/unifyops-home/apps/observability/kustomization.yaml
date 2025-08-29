@@ -3,8 +3,8 @@ kind: Kustomization
 resources:
   - kube-prometheus-stack/app.yaml
   - loki/app.yaml
-  - promtail/app.yaml
   - tempo/app.yaml
-  - otel-collector/app.yaml
+  - alloy-agent/app.yaml
+  - alloy-gateway/app.yaml
   - blackbox-exporter/app.yaml
   - prom-addons/app.yaml

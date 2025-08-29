@@ -1,8 +1,0 @@
-# clusters/unifyops-home/apps/observability/promtail/values.yaml
-config:
-  clients:
-    - url: http://loki.observability.svc.cluster.local:3100/loki/api/v1/push
-  snippets:
-    pipelineStages:
-      - docker: {}
-      - labeldrop: [filename]

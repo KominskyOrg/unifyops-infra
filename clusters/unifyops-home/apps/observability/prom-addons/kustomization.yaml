@@ -7,6 +7,7 @@ resources:
   - alertmanager-networkpolicy.yaml
   - additional-scrape-configs.secret.yaml
   - alertmanager-slack-webhook.sealedsecret.yaml
+  - alloy-gateway-service.yaml
   - servicemonitors/argocd.yaml
   - servicemonitors/cert-manager.yaml
   - servicemonitors/external-dns.yaml

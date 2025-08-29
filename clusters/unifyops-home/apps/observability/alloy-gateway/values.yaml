@@ -1,0 +1,34 @@
+controller:
+  type: Deployment
+  replicas: 2
+
+alloy:
+  configMap:
+    create: true
+    content: |
+      // --- Receive OTLP over gRPC (4317) and HTTP (4318) ---
+      otelcol.receiver.otlp "ingest" {
+        grpc { endpoint = "0.0.0.0:4317" }
+        http { endpoint = "0.0.0.0:4318" }
+        output {
+          metrics = [otelcol.processor.batch.default.input]
+          logs    = [otelcol.processor.batch.default.input]
+          traces  = [otelcol.processor.batch.default.input]
+        }
+      }
+
+      // --- Batch to improve compression/throughput ---
+      otelcol.processor.batch "default" {
+        output {
+          // Only traces forwarded to Tempo in this gateway; logs ship via alloy-agent
+          traces  = [otelcol.exporter.otlp.tempo.input]
+        }
+      }
+
+      // --- Export traces to Tempo (OTLP gRPC) ---
+      otelcol.exporter.otlp "tempo" {
+        client {
+          endpoint = "tempo:4317"
+          tls { insecure = true }
+        }
+      }
