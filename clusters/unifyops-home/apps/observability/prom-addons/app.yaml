@@ -1,0 +1,18 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: prom-addons
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"   # wait until CRDs from kube-prom stack exist
+spec:
+  project: infra
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+  source:
+    repoURL: https://github.com/KominskyOrg/unifyops-infra.git
+    targetRevision: HEAD
+    path: clusters/unifyops-home/apps/observability/prom-addons
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }

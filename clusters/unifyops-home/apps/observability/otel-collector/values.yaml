@@ -1,0 +1,20 @@
+mode: deployment
+presets:
+  kubernetesAttributes: { enabled: true }
+  logsCollection: { enabled: false }  # promtail handles logs
+config:
+  receivers:
+    otlp:
+      protocols: { http: {}, grpc: {} }
+  processors:
+    batch: {}
+  exporters:
+    otlphttp/tempo:
+      endpoint: http://tempo:4318
+      tls: { insecure: true }
+  service:
+    pipelines:
+      traces:
+        receivers: [otlp]
+        processors: [batch]
+        exporters: [otlphttp/tempo]
