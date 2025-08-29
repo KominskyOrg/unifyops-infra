@@ -12,6 +12,7 @@ spec:
   source:
     repoURL: https://grafana.github.io/helm-charts
     chart: loki
+    skipCrds: true
     targetRevision: "5.47.2"
     helm:
       values: |
