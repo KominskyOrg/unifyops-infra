@@ -11,9 +11,10 @@ spec:
     server: https://kubernetes.default.svc
     namespace: observability
   source:
-    repoURL: https://github.com/prometheus-operator/prometheus-operator
-    targetRevision: v0.77.1
-    path: bundle.yaml
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: prometheus-operator-crds
+    targetRevision: "23.0.0"  # pin; update in lockstep with kube-prometheus-stack bumps
   syncPolicy:
     automated: { prune: true, selfHeal: true }
-    syncOptions: ["ServerSideApply=true"]
+    syncOptions:
+      - ServerSideApply=true
