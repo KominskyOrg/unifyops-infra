@@ -13,9 +13,11 @@ spec:
   source:
     repoURL: https://prometheus-community.github.io/helm-charts
     chart: kube-prometheus-stack
-    targetRevision: ">=60.0.0"
+    targetRevision: "77.1.0"   # pin exact to be deterministic
     helm:
       valueFiles: ["values.yaml"]
   syncPolicy:
     automated: { prune: true, selfHeal: true }
-    syncOptions: ["CreateNamespace=true"]
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
