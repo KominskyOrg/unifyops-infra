@@ -12,8 +12,8 @@ spec:
     namespace: observability
   source:
     repoURL: https://github.com/prometheus-operator/prometheus-operator
-    targetRevision: v0.77.1   # match the operator version your chart expects
-    path: bundle.yaml         # uses the released CRD bundle
+    targetRevision: v0.77.1
+    path: bundle.yaml
   syncPolicy:
     automated: { prune: true, selfHeal: true }
     syncOptions: ["ServerSideApply=true"]
