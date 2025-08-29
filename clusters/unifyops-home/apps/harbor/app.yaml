@@ -3,16 +3,12 @@ kind: Application
 metadata:
   name: harbor
   namespace: argocd
-  annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-prod
-    external-dns.alpha.kubernetes.io/hostname: harbor.unifyops.io
 spec:
   project: infra
   source:
     repoURL: https://helm.goharbor.io
     chart: harbor
-    targetRevision: 1.16.0
-    ingressClassName: nginx-private
+    targetRevision: "1.16.0"
     helm:
       values: |
         expose:
@@ -23,14 +19,20 @@ spec:
             secret:
               secretName: harbor-tls
           ingress:
+            className: nginx-private
             hosts:
               core: harbor.unifyops.io
+            annotations:
+              cert-manager.io/cluster-issuer: letsencrypt-prod
+              external-dns.alpha.kubernetes.io/hostname: harbor.unifyops.io
+
         chartmuseum:
           enabled: false
         notary:
           enabled: false
         trivy:
           enabled: false
+
         persistence:
           enabled: true
           persistentVolumeClaim:
