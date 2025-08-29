@@ -49,4 +49,3 @@ spec:
         # Disable test pod
         test:
           enabled: false
-      skipCrds: true
