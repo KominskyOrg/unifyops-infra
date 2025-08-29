@@ -1,0 +1,12 @@
+persistence:
+  enabled: true
+  storageClassName: longhorn
+  size: 20Gi
+tempo:
+  storage:
+    trace:
+      backend: local
+      wal:
+        path: /var/tempo/wal
+      local:
+        path: /var/tempo/blocks
