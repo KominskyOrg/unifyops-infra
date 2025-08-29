@@ -19,7 +19,6 @@ spec:
           defaultClass: true
           defaultFsType: ext4
           defaultClassReplicaCount: 1
-      skipCrds: true
   destination:
     server: https://kubernetes.default.svc
     namespace: longhorn-system

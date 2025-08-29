@@ -4,4 +4,3 @@ resources:
   - app.yaml
   - longhorn-ingress.yaml
   - certificate.yaml
-  - crds.yaml
