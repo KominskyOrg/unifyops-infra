@@ -15,8 +15,8 @@ spec:
     targetRevision: "6.21.1"
     helm:
       values: |
-        # Use single binary deployment
-        deploymentMode: SingleBinary
+        # Use transitional mode to work around validation issues
+        deploymentMode: SingleBinary<->SimpleScalable
         
         loki:
           auth_enabled: false
