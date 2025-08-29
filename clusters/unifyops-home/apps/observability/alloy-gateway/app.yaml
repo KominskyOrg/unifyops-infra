@@ -15,10 +15,21 @@ spec:
     chart: alloy
     targetRevision: ">=0.6.0"
     helm:
-      value: | 
+      values: | 
         controller:
           type: Deployment
           replicas: 2
+
+        service:
+          enabled: true
+          type: ClusterIP
+          ports:
+            - name: otlp-grpc
+              port: 4317
+              targetPort: 4317
+            - name: otlp-http
+              port: 4318
+              targetPort: 4318
 
         alloy:
           configMap:

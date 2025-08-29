@@ -36,6 +36,16 @@ spec:
                 index:
                   prefix: loki_index_
                   period: 24h
+          limits_config:
+            retention_period: 168h  # 7d
+          compactor:
+            working_directory: /var/loki/compactor
+            retention_enabled: true
+          ruler:
+            storage:
+              type: local
+              local:
+                directory: /var/loki/rules
 
         singleBinary:
           enabled: true

@@ -21,6 +21,20 @@ spec:
 
         alloy:
           # Store the Alloy config inline in a ConfigMap
+          controller:
+            type: DaemonSet
+            tolerations:
+              - key: "node-tier"
+                operator: "Exists"
+                effect: "NoSchedule"
+
+          resources:
+            limits:
+              cpu: "400m"
+              memory: "512Mi"
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
           configMap:
             create: true
             content: |

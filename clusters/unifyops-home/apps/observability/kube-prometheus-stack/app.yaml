@@ -55,9 +55,9 @@ spec:
                   resources:
                     requests:
                       storage: 20Gi
-            additionalScrapeConfigs:
-              name: kps-additional-scrape-configs
-              key: additional-scrape-configs.yaml
+            # additionalScrapeConfigs:
+            #   name: kps-additional-scrape-configs
+            #   key: additional-scrape-configs.yaml
 
         # --- Alertmanager (optional – uncomment if you want it enabled now) ---
         # alertmanager:
