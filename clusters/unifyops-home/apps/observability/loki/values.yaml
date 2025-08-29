@@ -21,6 +21,17 @@ loki:
   server:
     http_listen_port: 3100
 
+  # Define storage type and bucket names (required for newer chart versions)
+  storage:
+    type: filesystem
+    filesystem:
+      chunks_directory: /var/loki/chunks
+      rules_directory: /var/loki/rules
+    bucketNames:
+      chunks: chunks
+      ruler: ruler
+      admin: admin
+
   # --- STORAGE: local filesystem (PVC) ---
   # TSDB/boltdb-shipper on local disk
   storage_config:

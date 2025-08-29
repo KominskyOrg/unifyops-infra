@@ -14,43 +14,5 @@ spec:
     chart: loki
     targetRevision: ">=6.0.0"
     helm:
-      values: |
-        deploymentMode: SingleBinary
-        read: { enabled: false }
-        write: { enabled: false }
-        backend: { enabled: false }
-        gateway: { enabled: false }
-        resultsCache: { enabled: false }
-        chunksCache: { enabled: false }
-
-        loki:
-          auth_enabled: false
-          server:
-            http_listen_port: 3100
-          storage_config:
-            filesystem:
-              directory: /var/loki/chunks
-            boltdb_shipper:
-              active_index_directory: /var/loki/index
-              cache_location: /var/loki/index_cache
-              shared_store: filesystem
-          schema_config:
-            configs:
-              - from: "2024-01-01"
-                store: tsdb
-                object_store: filesystem
-                schema: v13
-                index:
-                  prefix: loki_index_
-                  period: 24h
-
-        singleBinary:
-          replicas: 1
-          persistence:
-            enabled: true
-            size: 20Gi
-            storageClass: longhorn
-
-        service:
-          ports:
-            http: 3100
+      valuesFiles:
+        - values.yaml
