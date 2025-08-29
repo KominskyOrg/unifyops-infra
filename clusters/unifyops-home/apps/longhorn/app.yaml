@@ -19,7 +19,7 @@ spec:
           defaultClass: true
           defaultFsType: ext4
           defaultClassReplicaCount: 1
-      # (keep skipCrds: false so Argo manages CRDs)
+      skipCrds: true
   destination:
     server: https://kubernetes.default.svc
     namespace: longhorn-system

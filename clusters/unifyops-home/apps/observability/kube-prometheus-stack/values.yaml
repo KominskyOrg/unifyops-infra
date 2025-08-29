@@ -1,14 +1,43 @@
 fullnameOverride: kps
 
+# --- Prometheus Operator ---
+prometheusOperator:
+  enabled: true
+  # By default the operator only watches the namespace it runs in.
+  # This ensures it watches "observability" where you deploy Prometheus CRs.
+  namespaces:
+    releaseNamespace: true
+  # Extra RBAC rules just in case you’re scraping cluster-wide
+  admissionWebhooks:
+    enabled: true
+
+# --- Grafana ---
 grafana:
   enabled: true
-  ingress:        # We publish ingress separately in prom-addons to match your pattern
-    enabled: false
+  ingress:
+    enabled: false   # ingress handled in prom-addons
   persistence:
     enabled: true
     storageClassName: longhorn
     size: 5Gi
 
+# --- Prometheus ---
+prometheus:
+  prometheusSpec:
+    retention: 15d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: longhorn
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 20Gi
+    additionalScrapeConfigs:
+      name: kps-additional-scrape-configs
+      key: additional-scrape-configs.yaml
+
+# --- Alertmanager (optional – uncomment if you want it enabled now) ---
 # alertmanager:
 #   alertmanagerSpec:
 #     retention: 120h
@@ -28,20 +57,7 @@ grafana:
 #     receivers:
 #       - name: devnull
 
-prometheus:
-  prometheusSpec:
-    retention: 15d
-    storageSpec:
-      volumeClaimTemplate:
-        spec:
-          storageClassName: longhorn
-          accessModes: ["ReadWriteOnce"]
-          resources: { requests: { storage: 20Gi } }
-    additionalScrapeConfigs:
-      name: kps-additional-scrape-configs
-      key: additional-scrape-configs.yaml
-
-# k3s-friendly: disable components not exposed in k3s by default
+# --- k3s-friendly: disable unused components ---
 kubeScheduler: { enabled: false }
 kubeControllerManager: { enabled: false }
 kubeProxy: { enabled: false }
