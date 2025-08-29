@@ -65,3 +65,21 @@ singleBinary:
 service:
   ports:
     http: 3100
+
+# turn OFF grafana-agent/operator CRD things
+monitoring:
+  selfMonitoring:
+    enabled: false
+    grafanaAgent:
+      enabled: false
+  dashboards:
+    enabled: false
+  rules:
+    enabled: false
+
+  # keep a ServiceMonitor so kube-prometheus-stack scrapes Loki /metrics
+  serviceMonitor:
+    enabled: true
+    # If your Prometheus requires a label match, uncomment and set it here:
+    # labels:
+    #   release: kps
