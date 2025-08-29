@@ -15,14 +15,12 @@ spec:
     targetRevision: "5.47.2"
     helm:
       values: |
-        # Single binary deployment
-        deploymentMode: SingleBinary
-        
         loki:
           auth_enabled: false
           
           commonConfig:
             replication_factor: 1
+            path_prefix: /var/loki
             
           storage:
             bucketNames:
@@ -40,6 +38,7 @@ spec:
                   prefix: loki_index_
                   period: 24h
         
+        # Use the single binary deployment
         singleBinary:
           replicas: 1
           persistence:
@@ -47,33 +46,6 @@ spec:
             size: 20Gi
             storageClass: longhorn
         
-        # Explicitly disable all distributed components
-        read:
-          replicas: 0
-        write:
-          replicas: 0
-        backend:
-          replicas: 0
-        
-        # Disable simple scalable components completely
-        ingester:
-          replicas: 0
-        distributor:
-          replicas: 0
-        querier:
-          replicas: 0
-        queryFrontend:
-          replicas: 0
-        compactor:
-          replicas: 0
-        indexGateway:
-          replicas: 0
-        ruler:
-          replicas: 0
-        
-        gateway:
-          enabled: false
-          replicas: 0
-        
+        # Disable test pod
         test:
           enabled: false
