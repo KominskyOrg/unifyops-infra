@@ -1,18 +1,18 @@
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: alertmanager-restrict
-  namespace: observability
-spec:
-  podSelector:
-    matchLabels:
-      alertmanager: kps-alertmanager
-  policyTypes: ["Ingress"]
-  ingress:
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: ingress-nginx    # if you later publish AM UI
-      ports:
-        - protocol: TCP
-          port: 9093
+# apiVersion: networking.k8s.io/v1
+# kind: NetworkPolicy
+# metadata:
+#   name: alertmanager-restrict
+#   namespace: observability
+# spec:
+#   podSelector:
+#     matchLabels:
+#       alertmanager: kps-alertmanager
+#   policyTypes: ["Ingress"]
+#   ingress:
+#     - from:
+#         - namespaceSelector:
+#             matchLabels:
+#               kubernetes.io/metadata.name: ingress-nginx    # if you later publish AM UI
+#       ports:
+#         - protocol: TCP
+#           port: 9093
