@@ -15,6 +15,19 @@ spec:
     chart: tempo
     targetRevision: ">=1.7.0"
     helm:
-      valueFiles: ["values.yaml"]
+      values: |
+        persistence:
+          enabled: true
+          storageClassName: longhorn
+          size: 20Gi
+        tempo:
+          storage:
+            trace:
+              backend: local
+              wal:
+                path: /var/tempo/wal
+              local:
+                path: /var/tempo/blocks
+
   syncPolicy:
     automated: { prune: true, selfHeal: true }

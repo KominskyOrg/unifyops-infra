@@ -15,7 +15,67 @@ spec:
     chart: alloy
     targetRevision: ">=0.6.0"
     helm:
-      valueFiles: ["values.yaml"]
+      values: |
+        controller:
+          type: DaemonSet
+
+        alloy:
+          # Store the Alloy config inline in a ConfigMap
+          configMap:
+            create: true
+            content: |
+              // --- Loki destination (writes) ---
+              loki.write "default" {
+                endpoint {
+                  url = "http://loki:3100/loki/api/v1/push"
+                }
+              }
+
+              // --- Discover Kubernetes pods for log collection ---
+              discovery.kubernetes "pods" {
+                role = "pod"
+              }
+
+              // Optional relabeling (drop noisy targets or add labels)
+              discovery.relabel "pod_targets" {
+                targets = discovery.kubernetes.pods.targets
+
+                // Drop Terminated containers
+                rule {
+                  action = "drop"
+                  source_labels = ["__meta_kubernetes_pod_container_status_running"]
+                  regex = "false"
+                }
+              }
+
+              // --- Tail pod logs via Kubernetes API ---
+              loki.source.kubernetes "podlogs" {
+                targets    = discovery.relabel.pod_targets.output
+                forward_to = [loki.process.k8s.input]
+              }
+
+              // --- Collect Kubernetes cluster events ---
+              loki.source.kubernetes_events "events" {
+                forward_to = [loki.process.k8s.input]
+              }
+
+              // --- Process logs (parse JSON when present, add labels, drop filename) ---
+              loki.process "k8s" {
+                stage.json {        // parse JSON lines if applicable; keep raw if not JSON
+                  expressions = {}
+                  // If your services log JSON with "message" key, uncomment:
+                  // source = "log"
+                }
+                stage.labels {
+                  values = {
+                    cluster   = "unifyops-home",
+                  }
+                }
+                stage.labeldrop { values = ["filename"] }
+
+                forward_to = [loki.write.default.receiver]
+              }
+
       skipCrds: true
   syncPolicy:
     automated: { prune: true, selfHeal: true }

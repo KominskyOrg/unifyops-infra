@@ -15,8 +15,76 @@ spec:
     chart: kube-prometheus-stack
     targetRevision: "77.1.0"
     helm:
-      valueFiles: ["values.yaml"]
-  syncPolicy:
+      values: |
+        fullnameOverride: kps
+
+        # --- Prometheus Operator ---
+        prometheusOperator:
+          enabled: true
+          # By default the operator only watches the namespace it runs in.
+          # This ensures it watches "observability" where you deploy Prometheus CRs.
+          namespaces:
+            releaseNamespace: true
+          # Extra RBAC rules just in case you’re scraping cluster-wide
+          admissionWebhooks:
+            enabled: true
+
+        # --- Grafana ---
+        grafana:
+          enabled: true
+          ingress:
+            enabled: false   # ingress handled in prom-addons
+          persistence:
+            enabled: true
+            storageClassName: longhorn
+            size: 5Gi
+          env:
+            GF_SERVER_PROTOCOL: http
+            GF_SERVER_HTTP_PORT: "3000"
+            GF_SERVER_HTTP_ADDR: 0.0.0.0
+
+        # --- Prometheus ---
+        prometheus:
+          prometheusSpec:
+            retention: 15d
+            storageSpec:
+              volumeClaimTemplate:
+                spec:
+                  storageClassName: longhorn
+                  accessModes: ["ReadWriteOnce"]
+                  resources:
+                    requests:
+                      storage: 20Gi
+            additionalScrapeConfigs:
+              name: kps-additional-scrape-configs
+              key: additional-scrape-configs.yaml
+
+        # --- Alertmanager (optional – uncomment if you want it enabled now) ---
+        # alertmanager:
+        #   alertmanagerSpec:
+        #     retention: 120h
+        #     storage:
+        #       volumeClaimTemplate:
+        #         spec:
+        #           storageClassName: longhorn
+        #           accessModes: ["ReadWriteOnce"]
+        #           resources: { requests: { storage: 5Gi } }
+        #   config:
+        #     route:
+        #       receiver: devnull
+        #       group_by: ['alertname','cluster','namespace']
+        #       group_wait: 30s
+        #       group_interval: 5m
+        #       repeat_interval: 4h
+        #     receivers:
+        #       - name: devnull
+
+        # --- k3s-friendly: disable unused components ---
+        kubeScheduler: { enabled: false }
+        kubeControllerManager: { enabled: false }
+        kubeProxy: { enabled: false }
+
+    syncPolicy:
     automated: { prune: true, selfHeal: true }
     syncOptions:
       - CreateNamespace=true
