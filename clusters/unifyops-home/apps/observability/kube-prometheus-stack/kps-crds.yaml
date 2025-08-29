@@ -13,7 +13,8 @@ spec:
   source:
     repoURL: https://prometheus-community.github.io/helm-charts
     chart: prometheus-operator-crds
-    targetRevision: "23.0.0"  # pin; update in lockstep with kube-prometheus-stack bumps
+    skipCrds: true
+    targetRevision: "23.0.0"
   syncPolicy:
     automated: { prune: true, selfHeal: true }
     syncOptions:
