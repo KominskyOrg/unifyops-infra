@@ -1,15 +1,56 @@
+# Force single-process Loki (no object store)
+deploymentMode: SingleBinary
+
+# Disable all distributed components explicitly (belt + suspenders)
+read:
+  enabled: false
+write:
+  enabled: false
+backend:
+  enabled: false
+gateway:
+  enabled: false
+resultsCache:
+  enabled: false
+chunksCache:
+  enabled: false
+
+# Loki core settings
 loki:
   auth_enabled: false
-  commonConfig:
-    replication_factor: 1
-  storage:
-    type: filesystem
-persistence:
-  enabled: true
-  storageClass: longhorn
-  size: 20Gi
-compactor:
-  persistentVolume:
+  server:
+    http_listen_port: 3100
+
+  # --- STORAGE: local filesystem (PVC) ---
+  # TSDB/boltdb-shipper on local disk
+  storage_config:
+    filesystem:
+      directory: /var/loki/chunks
+    boltdb_shipper:
+      active_index_directory: /var/loki/index
+      cache_location: /var/loki/index_cache
+      shared_store: filesystem
+
+  # Schema for TSDB (works fine for homelab)
+  schema_config:
+    configs:
+      - from: "2024-01-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: loki_index_
+          period: 24h
+
+# SingleBinary pod + PVC
+singleBinary:
+  replicas: 1
+  persistence:
     enabled: true
-    size: 5Gi
+    size: 20Gi
     storageClass: longhorn
+
+# Service named "loki" on port 3100
+service:
+  ports:
+    http: 3100
