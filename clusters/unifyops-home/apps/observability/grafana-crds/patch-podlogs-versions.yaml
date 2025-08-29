@@ -1,0 +1,16 @@
+- op: test
+  path: /spec/versions
+- op: add
+  path: /spec/versions/-
+  value:
+    name: v1alpha1
+    served: false
+    storage: false
+    schema:
+      openAPIV3Schema:
+        type: object
+        x-kubernetes-preserve-unknown-fields: true
+- op: replace
+  path: /spec/versions
+  value: |
+    __REWRITE_BY_SCRIPT__
