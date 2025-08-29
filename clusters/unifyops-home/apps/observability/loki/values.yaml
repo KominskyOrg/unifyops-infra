@@ -40,6 +40,11 @@ monitoring:
     enabled: false
     installOperator: false
 
+gateway:
+  replicas: 1
+  affinity: {}
+  podAntiAffinityPreset: ""
+
 # Disable Helm test pod
 test:
   enabled: false
