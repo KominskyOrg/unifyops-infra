@@ -14,6 +14,7 @@ spec:
     chart: loki
     targetRevision: "5.47.2"
     helm:
+      skipCrds: true
       values: |
         loki:
           auth_enabled: false
