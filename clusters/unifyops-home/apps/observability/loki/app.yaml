@@ -15,15 +15,14 @@ spec:
     targetRevision: "6.21.1"
     helm:
       values: |
-        # Use transitional mode to work around validation issues
-        deploymentMode: SingleBinary<->SimpleScalable
+        deploymentMode: SingleBinary
         
         loki:
           auth_enabled: false
           
-          commonConfig:
-            replication_factor: 1
-            
+          # Empty commonConfig to override defaults
+          commonConfig: {}
+          
           storage:
             type: filesystem
             bucketNames:
@@ -40,8 +39,13 @@ spec:
                 index:
                   prefix: loki_index_
                   period: 24h
+          
+          # Add storage_config for filesystem
+          storageConfig:
+            filesystem:
+              chunks_directory: /var/loki/chunks
+              rules_directory: /var/loki/rules
         
-        # Single binary mode
         singleBinary:
           replicas: 1
           persistence:
@@ -49,7 +53,7 @@ spec:
             size: 20Gi
             storageClass: longhorn
         
-        # Disable components for microservices mode
+        # Ensure microservices components are disabled
         backend:
           replicas: 0
         read:
@@ -57,16 +61,11 @@ spec:
         write:
           replicas: 0
         
-        # Disable gateway
         gateway:
           enabled: false
-          
-        # Disable caches
         resultsCache:
           enabled: false
         chunksCache:
           enabled: false
-        
-        # Disable tests
         test:
           enabled: false
