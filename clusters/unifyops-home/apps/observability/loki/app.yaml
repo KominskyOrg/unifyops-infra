@@ -15,6 +15,7 @@ spec:
     targetRevision: ">=6.0.0"
     helm:
       values: |
+        # Force single binary mode
         deploymentMode: SingleBinary
         
         loki:
@@ -22,6 +23,11 @@ spec:
           
           commonConfig:
             replication_factor: 1
+            path_prefix: /var/loki
+            storage:
+              filesystem:
+                chunks_directory: /var/loki/chunks
+                rules_directory: /var/loki/rules
             
           storage:
             type: filesystem
@@ -40,6 +46,7 @@ spec:
                   prefix: loki_index_
                   period: 24h
         
+        # Single binary configuration
         singleBinary:
           replicas: 1
           persistence:
@@ -47,12 +54,18 @@ spec:
             size: 20Gi
             storageClass: longhorn
         
-        # Disable distributed components
+        # Explicitly disable all distributed components
         read:
-          replicas: 0
+          enabled: false
         write:
-          replicas: 0
+          enabled: false  
         backend:
-          replicas: 0
+          enabled: false
         gateway:
+          enabled: false
+        
+        # Disable caches
+        resultsCache:
+          enabled: false
+        chunksCache:
           enabled: false
