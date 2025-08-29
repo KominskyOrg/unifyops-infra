@@ -1,0 +1,40 @@
+# Longhorn Helm Chart Values
+defaultSettings:
+  # Path where your 3.6TB NVMe is mounted
+  defaultDataPath: /var/lib/longhorn
+  
+  # Single node setup
+  defaultReplicaCount: 1
+  
+  # Storage settings for 3.6TB drive
+  storageOverProvisioningPercentage: 100
+  storageMinimalAvailablePercentage: 5
+  
+  # Auto cleanup settings
+  deleteEmptyDirData: true
+  
+  # Backup target (optional, can be configured later)
+  backupTarget: ""
+
+persistence:
+  defaultClass: true
+  defaultClassReplicaCount: 1
+  reclaimPolicy: Delete
+
+# Single node optimizations
+longhornManager:
+  nodeSelector: {}
+  tolerations: []
+
+# Ensure proper resource allocation
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 200m
+    memory: 256Mi
+
+# Ingress for UI
+ingress:
+  enabled: false  # We'll use our own ingress config
