@@ -4,9 +4,18 @@ metadata:
   name: grafana
   namespace: observability
   annotations:
-    kubernetes.io/ingress.class: nginx-private
-    cert-manager.io/cluster-issuer: ca-issuer
+    # issue LE cert via DNS-01
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    # publish DNS
+    external-dns.alpha.kubernetes.io/hostname: grafana.unifyops.io
+    # nginx: force HTTP -> HTTPS redirect
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
 spec:
+  ingressClassName: nginx-private
+  tls:
+  - secretName: grafana-unifyops-io
+    hosts:
+      - grafana.unifyops.io
   rules:
   - host: grafana.unifyops.io
     http:
@@ -18,6 +27,3 @@ spec:
             name: kps-grafana
             port:
               number: 80
-  tls:
-  - hosts: ["grafana.unifyops.io"]
-    secretName: grafana-tls
