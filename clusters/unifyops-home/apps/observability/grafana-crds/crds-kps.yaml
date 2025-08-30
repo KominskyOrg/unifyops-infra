@@ -1,0 +1,268 @@
+# ------------------------------------------------------------
+# kube-prometheus-stack / Prometheus Operator CRDs
+# Group: monitoring.coreos.com
+# These CRDs are intentionally minimal & permissive:
+# - versions: v1 (served+storage)
+# - schema: x-kubernetes-preserve-unknown-fields (to avoid drift issues)
+# - subresources: status (operator can update status)
+# ------------------------------------------------------------
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: alertmanagers.monitoring.coreos.com
+spec:
+  group: monitoring.coreos.com
+  scope: Namespaced
+  names:
+    kind: Alertmanager
+    listKind: AlertmanagerList
+    plural: alertmanagers
+    singular: alertmanager
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          x-kubernetes-preserve-unknown-fields: true
+      subresources:
+        status: {}
+  conversion:
+    strategy: None
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: alertmanagerconfigs.monitoring.coreos.com
+spec:
+  group: monitoring.coreos.com
+  scope: Namespaced
+  names:
+    kind: AlertmanagerConfig
+    listKind: AlertmanagerConfigList
+    plural: alertmanagerconfigs
+    singular: alertmanagerconfig
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          x-kubernetes-preserve-unknown-fields: true
+      subresources:
+        status: {}
+  conversion:
+    strategy: None
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: prometheuses.monitoring.coreos.com
+spec:
+  group: monitoring.coreos.com
+  scope: Namespaced
+  names:
+    kind: Prometheus
+    listKind: PrometheusList
+    plural: prometheuses
+    singular: prometheus
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          x-kubernetes-preserve-unknown-fields: true
+      subresources:
+        status: {}
+  conversion:
+    strategy: None
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: prometheusagents.monitoring.coreos.com
+spec:
+  group: monitoring.coreos.com
+  scope: Namespaced
+  names:
+    kind: PrometheusAgent
+    listKind: PrometheusAgentList
+    plural: prometheusagents
+    singular: prometheusagent
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          x-kubernetes-preserve-unknown-fields: true
+      subresources:
+        status: {}
+  conversion:
+    strategy: None
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: prometheusrules.monitoring.coreos.com
+spec:
+  group: monitoring.coreos.com
+  scope: Namespaced
+  names:
+    kind: PrometheusRule
+    listKind: PrometheusRuleList
+    plural: prometheusrules
+    singular: prometheusrule
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          x-kubernetes-preserve-unknown-fields: true
+      subresources:
+        status: {}
+  conversion:
+    strategy: None
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: servicemonitors.monitoring.coreos.com
+spec:
+  group: monitoring.coreos.com
+  scope: Namespaced
+  names:
+    kind: ServiceMonitor
+    listKind: ServiceMonitorList
+    plural: servicemonitors
+    singular: servicemonitor
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          x-kubernetes-preserve-unknown-fields: true
+      subresources:
+        status: {}
+  conversion:
+    strategy: None
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: podmonitors.monitoring.coreos.com
+spec:
+  group: monitoring.coreos.com
+  scope: Namespaced
+  names:
+    kind: PodMonitor
+    listKind: PodMonitorList
+    plural: podmonitors
+    singular: podmonitor
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          x-kubernetes-preserve-unknown-fields: true
+      subresources:
+        status: {}
+  conversion:
+    strategy: None
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: probes.monitoring.coreos.com
+spec:
+  group: monitoring.coreos.com
+  scope: Namespaced
+  names:
+    kind: Probe
+    listKind: ProbeList
+    plural: probes
+    singular: probe
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          x-kubernetes-preserve-unknown-fields: true
+      subresources:
+        status: {}
+  conversion:
+    strategy: None
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: thanosrulers.monitoring.coreos.com
+spec:
+  group: monitoring.coreos.com
+  scope: Namespaced
+  names:
+    kind: ThanosRuler
+    listKind: ThanosRulerList
+    plural: thanosrulers
+    singular: thanosruler
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          x-kubernetes-preserve-unknown-fields: true
+      subresources:
+        status: {}
+  conversion:
+    strategy: None
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: scrapeconfigs.monitoring.coreos.com
+spec:
+  group: monitoring.coreos.com
+  scope: Namespaced
+  names:
+    kind: ScrapeConfig
+    listKind: ScrapeConfigList
+    plural: scrapeconfigs
+    singular: scrapeconfig
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          x-kubernetes-preserve-unknown-fields: true
+      subresources:
+        status: {}
+  conversion:
+    strategy: None
