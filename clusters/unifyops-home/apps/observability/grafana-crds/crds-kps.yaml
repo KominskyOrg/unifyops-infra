@@ -1,10 +1,11 @@
 # ------------------------------------------------------------
-# kube-prometheus-stack / Prometheus Operator CRDs
+# kube-prometheus-stack / Prometheus Operator CRDs (compat)
 # Group: monitoring.coreos.com
-# These CRDs are intentionally minimal & permissive:
-# - versions: v1 (served+storage)
-# - schema: x-kubernetes-preserve-unknown-fields (to avoid drift issues)
-# - subresources: status (operator can update status)
+# Rationale:
+# - Your cluster previously stored some CRs in v1alpha1 (status.storedVersions shows v1alpha1).
+# - To satisfy the apiserver constraint, we include a non-storage, non-served v1alpha1 entry
+#   alongside v1 (storage=true). This avoids the "status.storedVersions[...] missing from spec.versions" error.
+# - Schema is permissive to avoid drift issues.
 # ------------------------------------------------------------
 
 ---
@@ -21,6 +22,13 @@ spec:
     plural: alertmanagers
     singular: alertmanager
   versions:
+    - name: v1alpha1
+      served: false
+      storage: false
+      schema:
+        openAPIV3Schema:
+          type: object
+          x-kubernetes-preserve-unknown-fields: true
     - name: v1
       served: true
       storage: true
@@ -47,6 +55,13 @@ spec:
     plural: alertmanagerconfigs
     singular: alertmanagerconfig
   versions:
+    - name: v1alpha1
+      served: false
+      storage: false
+      schema:
+        openAPIV3Schema:
+          type: object
+          x-kubernetes-preserve-unknown-fields: true
     - name: v1
       served: true
       storage: true
@@ -73,6 +88,13 @@ spec:
     plural: prometheuses
     singular: prometheus
   versions:
+    - name: v1alpha1
+      served: false
+      storage: false
+      schema:
+        openAPIV3Schema:
+          type: object
+          x-kubernetes-preserve-unknown-fields: true
     - name: v1
       served: true
       storage: true
@@ -99,6 +121,13 @@ spec:
     plural: prometheusagents
     singular: prometheusagent
   versions:
+    - name: v1alpha1
+      served: false
+      storage: false
+      schema:
+        openAPIV3Schema:
+          type: object
+          x-kubernetes-preserve-unknown-fields: true
     - name: v1
       served: true
       storage: true
@@ -125,6 +154,13 @@ spec:
     plural: prometheusrules
     singular: prometheusrule
   versions:
+    - name: v1alpha1
+      served: false
+      storage: false
+      schema:
+        openAPIV3Schema:
+          type: object
+          x-kubernetes-preserve-unknown-fields: true
     - name: v1
       served: true
       storage: true
@@ -151,6 +187,13 @@ spec:
     plural: servicemonitors
     singular: servicemonitor
   versions:
+    - name: v1alpha1
+      served: false
+      storage: false
+      schema:
+        openAPIV3Schema:
+          type: object
+          x-kubernetes-preserve-unknown-fields: true
     - name: v1
       served: true
       storage: true
@@ -177,6 +220,13 @@ spec:
     plural: podmonitors
     singular: podmonitor
   versions:
+    - name: v1alpha1
+      served: false
+      storage: false
+      schema:
+        openAPIV3Schema:
+          type: object
+          x-kubernetes-preserve-unknown-fields: true
     - name: v1
       served: true
       storage: true
@@ -203,6 +253,13 @@ spec:
     plural: probes
     singular: probe
   versions:
+    - name: v1alpha1
+      served: false
+      storage: false
+      schema:
+        openAPIV3Schema:
+          type: object
+          x-kubernetes-preserve-unknown-fields: true
     - name: v1
       served: true
       storage: true
@@ -229,6 +286,13 @@ spec:
     plural: thanosrulers
     singular: thanosruler
   versions:
+    - name: v1alpha1
+      served: false
+      storage: false
+      schema:
+        openAPIV3Schema:
+          type: object
+          x-kubernetes-preserve-unknown-fields: true
     - name: v1
       served: true
       storage: true
@@ -255,6 +319,13 @@ spec:
     plural: scrapeconfigs
     singular: scrapeconfig
   versions:
+    - name: v1alpha1
+      served: false
+      storage: false
+      schema:
+        openAPIV3Schema:
+          type: object
+          x-kubernetes-preserve-unknown-fields: true
     - name: v1
       served: true
       storage: true
