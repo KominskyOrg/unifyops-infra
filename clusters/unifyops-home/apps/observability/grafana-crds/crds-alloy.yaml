@@ -15,7 +15,6 @@ spec:
     plural: podlogs
     singular: podlogs
   versions:
-    # Permissive v1alpha1 as the storage version (operator expects this)
     - name: v1alpha1
       served: true
       storage: true
@@ -23,7 +22,6 @@ spec:
         openAPIV3Schema:
           type: object
           x-kubernetes-preserve-unknown-fields: true
-    # Keep v1alpha2 served (non-storage). Use permissive schema to avoid drift issues.
     - name: v1alpha2
       served: true
       storage: false
@@ -33,7 +31,6 @@ spec:
           x-kubernetes-preserve-unknown-fields: true
   conversion:
     strategy: None
-
 ---
 # ------------------------------------------------------------
 # GrafanaAgent CRD
@@ -67,7 +64,6 @@ spec:
           x-kubernetes-preserve-unknown-fields: true
   conversion:
     strategy: None
-
 ---
 # ------------------------------------------------------------
 # LogsInstance CRD
@@ -101,7 +97,6 @@ spec:
           x-kubernetes-preserve-unknown-fields: true
   conversion:
     strategy: None
-
 ---
 # ------------------------------------------------------------
 # MetricsInstance CRD
@@ -123,10 +118,6 @@ spec:
       served: true
       storage: true
       schema:
-        openOPIV3Schema: # note: typo corrected in next line
-          type: object
-          x-kubernetes-preserve-unknown-fields: true
-        # Corrected key (above line had a typo); Kubernetes will read the one below:
         openAPIV3Schema:
           type: object
           x-kubernetes-preserve-unknown-fields: true
@@ -139,7 +130,6 @@ spec:
           x-kubernetes-preserve-unknown-fields: true
   conversion:
     strategy: None
-
 ---
 # ------------------------------------------------------------
 # Integration CRD
