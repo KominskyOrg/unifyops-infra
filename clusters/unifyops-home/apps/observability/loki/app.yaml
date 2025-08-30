@@ -23,29 +23,25 @@ spec:
             replication_factor: 1
             path_prefix: /var/loki
           storage:
-            bucketNames:
-              chunks: chunks
-              ruler: ruler
-              admin: admin
+            type: filesystem
           schemaConfig:
             configs:
               - from: "2024-01-01"
                 store: boltdb-shipper
                 object_store: filesystem
-                schema: v12
+                schema: v13
                 index:
-                  prefix: loki_index_
+                  prefix: index_
                   period: 24h
           limits_config:
             retention_period: 168h  # 7d
-          compactor:
-            working_directory: /var/loki/compactor
-            retention_enabled: true
           ruler:
             storage:
               type: local
               local:
                 directory: /var/loki/rules
+          compactor:
+            working_directory: /var/loki/compactor
 
         singleBinary:
           enabled: true
@@ -66,6 +62,14 @@ spec:
         # disable helm test pod
         test:
           enabled: false
+        # make sure Loki can write where it needs to
+        readOnlyRootFilesystem: false
+
+        # persistence using Longhorn (PVC already exists in your setup)
+        persistence:
+          enabled: true
+          storageClassName: longhorn
+          size: 400Gi
   syncPolicy:
     automated: { prune: true, selfHeal: true }
     syncOptions: ["CreateNamespace=true", "ServerSideApply=true"]
