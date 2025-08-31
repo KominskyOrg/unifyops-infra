@@ -38,3 +38,7 @@ terraform.rc
 *.tfplan
 
 .DS_Store
+
+# Raw secrets (should be sealed)
+*-raw.yaml
+*-unsealed.yaml
