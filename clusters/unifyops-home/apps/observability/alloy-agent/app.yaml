@@ -21,20 +21,19 @@ spec:
         service:
           enabled: true
 
-        alloy:
-          # render a Pod directly without the configMap indirection
-          image:
-            repository: grafana/alloy
-            tag: v1.10.1
-          resources:
-            limits: { cpu: "400m", memory: "512Mi" }
-            requests: { cpu: "100m", memory: "128Mi" }
-          config: |
+        configMap:
+          create: true
+          content: |
             // --- Loki destination (writes) ---
             loki.write "default" {
               endpoint { url = "http://loki:3100/loki/api/v1/push" }
             }
-            discovery.kubernetes "pods" { role = "pod" }
+            
+            // --- Pod discovery and relabeling ---
+            discovery.kubernetes "pods" { 
+              role = "pod" 
+            }
+            
             discovery.relabel "pod_targets" {
               targets = discovery.kubernetes.pods.targets
               rule {
@@ -43,19 +42,36 @@ spec:
                 regex = "false"
               }
             }
+            
+            // --- Log collection from pods ---
             loki.source.kubernetes "podlogs" {
               targets    = discovery.relabel.pod_targets.output
               forward_to = [loki.process.k8s.input]
             }
+            
+            // --- Kubernetes events collection ---
             loki.source.kubernetes_events "events" {
               forward_to = [loki.process.k8s.input]
             }
+            
+            // --- Processing pipeline ---
             loki.process "k8s" {
-              stage.json { expressions = {} }
-              stage.labels { values = { cluster = "unifyops-home" } }
-              stage.labeldrop { values = ["filename"] }
+              stage.static_labels { 
+                values = { 
+                  cluster = "unifyops-home" 
+                } 
+              }
               forward_to = [loki.write.default.receiver]
             }
+        
+        alloy:
+          resources:
+            limits: 
+              cpu: "400m"
+              memory: "512Mi"
+            requests: 
+              cpu: "100m"
+              memory: "128Mi"
 
       skipCrds: true
   syncPolicy:
