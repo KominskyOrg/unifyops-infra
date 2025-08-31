@@ -13,17 +13,16 @@ spec:
   source:
     repoURL: https://grafana.github.io/helm-charts
     chart: alloy
-    targetRevision: ">=0.6.0"
+    targetRevision: "1.2.1"        # <= pin
     helm:
       values: |
-        # in the alloy-agent app values
         controller:
-          type: daemonset
-
+          enabled: true
+          type: daemonset          # <= lowercase
         alloy:
           resources:
-            limits: {cpu: "400m", memory: "512Mi" }
-            requests: { cpu: "100m", memory: "128Mi" }
+            limits: {cpu: "400m", memory: "512Mi"}
+            requests: {cpu: "100m", memory: "128Mi"}
           configMap:
             create: true
             content: |
