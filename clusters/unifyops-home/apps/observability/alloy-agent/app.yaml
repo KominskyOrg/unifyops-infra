@@ -20,51 +20,51 @@ spec:
 
         service:
           enabled: true
-
-        configMap:
-          create: true
-          content: |
-            // --- Loki destination (writes) ---
-            loki.write "default" {
-              endpoint { url = "http://loki:3100/loki/api/v1/push" }
-            }
-            
-            // --- Pod discovery and relabeling ---
-            discovery.kubernetes "pods" { 
-              role = "pod" 
-            }
-            
-            discovery.relabel "pod_targets" {
-              targets = discovery.kubernetes.pods.targets
-              rule {
-                action = "drop"
-                source_labels = ["__meta_kubernetes_pod_container_status_running"]
-                regex = "false"
-              }
-            }
-            
-            // --- Log collection from pods ---
-            loki.source.kubernetes "podlogs" {
-              targets    = discovery.relabel.pod_targets.output
-              forward_to = [loki.process.k8s.input]
-            }
-            
-            // --- Kubernetes events collection ---
-            loki.source.kubernetes_events "events" {
-              forward_to = [loki.process.k8s.input]
-            }
-            
-            // --- Processing pipeline ---
-            loki.process "k8s" {
-              stage.static_labels { 
-                values = { 
-                  cluster = "unifyops-home" 
-                } 
-              }
-              forward_to = [loki.write.default.receiver]
-            }
         
         alloy:
+          configMap:
+            create: true
+            content: |
+              // --- Loki destination (writes) ---
+              loki.write "default" {
+                endpoint { url = "http://loki:3100/loki/api/v1/push" }
+              }
+              
+              // --- Pod discovery and relabeling ---
+              discovery.kubernetes "pods" { 
+                role = "pod" 
+              }
+              
+              discovery.relabel "pod_targets" {
+                targets = discovery.kubernetes.pods.targets
+                rule {
+                  action = "drop"
+                  source_labels = ["__meta_kubernetes_pod_container_status_running"]
+                  regex = "false"
+                }
+              }
+              
+              // --- Log collection from pods ---
+              loki.source.kubernetes "podlogs" {
+                targets    = discovery.relabel.pod_targets.output
+                forward_to = [loki.process.k8s.input]
+              }
+              
+              // --- Kubernetes events collection ---
+              loki.source.kubernetes_events "events" {
+                forward_to = [loki.process.k8s.input]
+              }
+              
+              // --- Processing pipeline ---
+              loki.process "k8s" {
+                stage.static_labels { 
+                  values = { 
+                    cluster = "unifyops-home" 
+                  } 
+                }
+                forward_to = [loki.write.default.receiver]
+              }
+          
           resources:
             limits: 
               cpu: "400m"
