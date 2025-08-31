@@ -19,6 +19,11 @@ spec:
 
         loki:
           auth_enabled: false
+          pattern_ingester:
+            enabled: true
+          limits_config:
+            allow_structured_metadata: true
+            volume_enabled: true
           commonConfig:
             replication_factor: 1
             path_prefix: /var/loki
