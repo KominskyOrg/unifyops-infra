@@ -58,9 +58,7 @@ spec:
               // --- Processing pipeline ---
               loki.process "k8s" {
                 stage.static_labels { 
-                  values = { 
-                    cluster = "unifyops-home" 
-                  } 
+                  values = { cluster = "unifyops-home" } 
                 }
                 forward_to = [loki.write.default.receiver]
               }
