@@ -3,3 +3,4 @@ kind: Kustomization
 resources:
   - crds-alloy.yaml
   - crds-kps.yaml
+  - crs-alloy.yaml
