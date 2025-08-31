@@ -52,11 +52,33 @@ spec:
             jsonData:
               timeout: 60
               maxLines: 1000
+              derivedFields:
+                - datasourceUid: tempo
+                  matcherRegex: "traceID=(\\w+)"
+                  name: TraceID
+                  url: "$${__value.raw}"
+          - name: Tempo
+            type: tempo
+            access: proxy
+            url: http://tempo:3200
+            isDefault: false
+            jsonData:
+              httpMethod: GET
+              tracesToLogs:
+                datasourceUid: loki
+                tags: ["job", "namespace", "pod"]
 
         # --- Prometheus ---
         prometheus:
           prometheusSpec:
             retention: 15d
+            resources:
+              limits:
+                cpu: 1000m
+                memory: 2Gi
+              requests:
+                cpu: 250m
+                memory: 1Gi
             storageSpec:
               volumeClaimTemplate:
                 spec:
@@ -69,25 +91,47 @@ spec:
             #   name: kps-additional-scrape-configs
             #   key: additional-scrape-configs.yaml
 
-        # --- Alertmanager (optional – uncomment if you want it enabled now) ---
-        # alertmanager:
-        #   alertmanagerSpec:
-        #     retention: 120h
-        #     storage:
-        #       volumeClaimTemplate:
-        #         spec:
-        #           storageClassName: longhorn
-        #           accessModes: ["ReadWriteOnce"]
-        #           resources: { requests: { storage: 5Gi } }
-        #   config:
-        #     route:
-        #       receiver: devnull
-        #       group_by: ['alertname','cluster','namespace']
-        #       group_wait: 30s
-        #       group_interval: 5m
-        #       repeat_interval: 4h
-        #     receivers:
-        #       - name: devnull
+        # --- Alertmanager ---
+        alertmanager:
+          enabled: true
+          alertmanagerSpec:
+            retention: 120h
+            resources:
+              limits:
+                cpu: 100m
+                memory: 256Mi
+              requests:
+                cpu: 50m
+                memory: 128Mi
+            storage:
+              volumeClaimTemplate:
+                spec:
+                  storageClassName: longhorn
+                  accessModes: ["ReadWriteOnce"]
+                  resources: 
+                    requests: 
+                      storage: 5Gi
+          config:
+            global:
+              resolve_timeout: 5m
+            route:
+              receiver: 'null'
+              group_by: ['alertname','cluster','namespace']
+              group_wait: 30s
+              group_interval: 5m
+              repeat_interval: 4h
+              routes:
+                - receiver: 'null'
+                  matchers:
+                    - alertname = "InfoInhibitor"
+                - receiver: 'critical'
+                  matchers:
+                    - severity = "critical"
+                  continue: true
+            receivers:
+              - name: 'null'
+              - name: 'critical'
+                # Add webhook_configs, email_configs, or slack_configs here later
 
         # --- k3s-friendly: disable unused components ---
         kubeScheduler: { enabled: false }
