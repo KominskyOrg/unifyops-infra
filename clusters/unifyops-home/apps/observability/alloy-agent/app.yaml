@@ -47,12 +47,12 @@ spec:
               // --- Log collection from pods ---
               loki.source.kubernetes "podlogs" {
                 targets    = discovery.relabel.pod_targets.output
-                forward_to = [loki.process.k8s.input]
+                forward_to = [loki.process.k8s.receiver]
               }
               
               // --- Kubernetes events collection ---
               loki.source.kubernetes_events "events" {
-                forward_to = [loki.process.k8s.input]
+                forward_to = [loki.process.k8s.receiver]
               }
               
               // --- Processing pipeline ---
