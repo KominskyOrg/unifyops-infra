@@ -18,7 +18,7 @@ spec:
       source:
         repoURL: https://github.com/KominskyOrg/unifyops.git
         targetRevision: '{{branch}}'
-        path: apps/unifyops/overlays/{{overlay}}
+        path: clusters/unifyops-home/apps/unifyops/overlays/{{overlay}}
       destination:
         server: https://kubernetes.default.svc
         namespace: '{{namespace}}'
