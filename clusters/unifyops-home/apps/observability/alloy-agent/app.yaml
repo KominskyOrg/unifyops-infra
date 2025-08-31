@@ -3,8 +3,6 @@ kind: Application
 metadata:
   name: alloy-agent
   namespace: argocd
-  annotations:
-    argocd.argoproj.io/sync-wave: "-2"
 spec:
   project: infra
   destination:
@@ -13,47 +11,53 @@ spec:
   source:
     repoURL: https://grafana.github.io/helm-charts
     chart: alloy
-    targetRevision: "1.2.1"        # <= pin
+    targetRevision: "1.2.1"           # pin
     helm:
       values: |
         controller:
           enabled: true
-          type: daemonset          # <= lowercase
+          type: daemonset
+
+        service:
+          enabled: true
+
         alloy:
+          # render a Pod directly without the configMap indirection
+          image:
+            repository: grafana/alloy
+            tag: v1.10.1
           resources:
-            limits: {cpu: "400m", memory: "512Mi"}
-            requests: {cpu: "100m", memory: "128Mi"}
-          configMap:
-            create: true
-            content: |
-              // --- Loki destination (writes) ---
-              loki.write "default" {
-                endpoint { url = "http://loki:3100/loki/api/v1/push" }
+            limits: { cpu: "400m", memory: "512Mi" }
+            requests: { cpu: "100m", memory: "128Mi" }
+          config: |
+            // --- Loki destination (writes) ---
+            loki.write "default" {
+              endpoint { url = "http://loki:3100/loki/api/v1/push" }
+            }
+            discovery.kubernetes "pods" { role = "pod" }
+            discovery.relabel "pod_targets" {
+              targets = discovery.kubernetes.pods.targets
+              rule {
+                action = "drop"
+                source_labels = ["__meta_kubernetes_pod_container_status_running"]
+                regex = "false"
               }
-              discovery.kubernetes "pods" { role = "pod" }
-              discovery.relabel "pod_targets" {
-                targets = discovery.kubernetes.pods.targets
-                rule {
-                  action = "drop"
-                  source_labels = ["__meta_kubernetes_pod_container_status_running"]
-                  regex = "false"
-                }
-              }
-              loki.source.kubernetes "podlogs" {
-                targets    = discovery.relabel.pod_targets.output
-                forward_to = [loki.process.k8s.input]
-              }
-              loki.source.kubernetes_events "events" {
-                forward_to = [loki.process.k8s.input]
-              }
-              loki.process "k8s" {
-                stage.json { expressions = {} }
-                stage.labels { values = { cluster = "unifyops-home" } }
-                stage.labeldrop { values = ["filename"] }
-                forward_to = [loki.write.default.receiver]
-              }
+            }
+            loki.source.kubernetes "podlogs" {
+              targets    = discovery.relabel.pod_targets.output
+              forward_to = [loki.process.k8s.input]
+            }
+            loki.source.kubernetes_events "events" {
+              forward_to = [loki.process.k8s.input]
+            }
+            loki.process "k8s" {
+              stage.json { expressions = {} }
+              stage.labels { values = { cluster = "unifyops-home" } }
+              stage.labeldrop { values = ["filename"] }
+              forward_to = [loki.write.default.receiver]
+            }
 
       skipCrds: true
   syncPolicy:
     automated: { prune: true, selfHeal: true }
-    syncOptions: ["CreateNamespace=true", "ServerSideApply=true"]
+    syncOptions: ["CreateNamespace=true","ServerSideApply=true"]
