@@ -1,0 +1,71 @@
+# Auth API Gateway - Production Environment Values
+# These values override the base Helm chart for production environment
+
+global:
+  namespace: uo-prod
+  imageRegistry: harbor.unifyops.io/library
+  imagePullSecrets:
+    - name: harbor-registry
+
+stack:
+  name: auth
+  appType: api
+
+enabled: true
+replicaCount: 3
+
+image:
+  repository: auth-api
+  tag: prod-latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8002
+  targetPort: 8002
+
+# Production uses path-based routing
+ingress:
+  enabled: true
+  className: nginx-private
+  hosts:
+    - host: api.unifyops.io
+      paths:
+        - path: /api/auth
+          pathType: Prefix
+  tls:
+    - secretName: api-unifyops-tls
+      hosts:
+        - api.unifyops.io
+
+config:
+  # Common config
+  apiPort: "8002"
+  environment: "production"
+  logLevel: "WARNING"
+  
+  # API Gateway config
+  serviceUrl: "http://auth-service:8001"
+  
+  # Rate limiting
+  rateLimitPerMinute: "200"
+  corsAllowedOrigins: "https://auth.unifyops.io"
+  
+  # Auth verification endpoint (for other services)
+  authApiUrl: "http://auth-api:8002"
+  authApiPrefix: "/api/auth"
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 512Mi
+  limits:
+    cpu: 2000m
+    memory: 2Gi
+
+# Production autoscaling
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
