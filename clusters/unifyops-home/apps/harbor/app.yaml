@@ -11,6 +11,7 @@ spec:
     targetRevision: "1.16.0"
     helm:
       values: |
+        externalURL: https://harbor.unifyops.io
         expose:
           type: ingress
           tls:
