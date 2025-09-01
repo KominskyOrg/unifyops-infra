@@ -1,0 +1,52 @@
+# Auth Frontend App - Development Environment Values
+# These values override the base Helm chart for dev environment
+
+global:
+  namespace: uo-dev
+  imageRegistry: harbor.unifyops.io/library
+  imagePullSecrets:
+    - name: harbor-registry
+
+stack:
+  name: auth
+  appType: app
+
+enabled: true
+replicaCount: 1
+
+image:
+  repository: auth-app
+  tag: dev-latest
+  pullPolicy: Always
+
+service:
+  type: ClusterIP
+  port: 3000
+  targetPort: 80  # Nginx serves on port 80
+
+ingress:
+  enabled: true
+  className: nginx-private
+  hosts:
+    - host: auth.dev.unifyops.io
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: auth-dev-tls
+      hosts:
+        - auth.dev.unifyops.io
+
+config:
+  # Frontend environment variables (injected at build time)
+  apiUrl: "https://dev.unifyops.io/api/auth"
+  appName: "UnifyOps Auth (Dev)"
+  environment: "development"
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi

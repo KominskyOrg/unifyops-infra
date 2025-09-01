@@ -1,0 +1,73 @@
+# Auth Service - Staging Environment Values
+# These values override the base Helm chart for staging environment
+
+global:
+  namespace: uo-staging
+  imageRegistry: harbor.unifyops.io/library
+  imagePullSecrets:
+    - name: harbor-registry
+
+stack:
+  name: auth
+  appType: service
+
+enabled: true
+replicaCount: 2
+
+image:
+  repository: auth-service
+  tag: staging-latest
+  pullPolicy: Always
+
+service:
+  type: ClusterIP
+  port: 8001
+  targetPort: 8001
+
+# Enable ingress for staging testing (optional)
+ingress:
+  enabled: true
+  className: nginx-private
+  hosts:
+    - host: staging.unifyops.io
+      paths:
+        - path: /service/auth
+          pathType: Prefix
+  tls:
+    - secretName: staging-unifyops-tls
+      hosts:
+        - staging.unifyops.io
+
+config:
+  # Common config
+  environment: "staging"
+  logLevel: "INFO"
+  
+  # Service-specific config
+  databaseUrl: "postgresql://auth_user:staging-password@auth-service-postgresql:5432/auth_db"
+  databaseSchema: "auth"
+  
+  # Auth config
+  secretKey: "staging-secret-key-change-in-production"
+  accessTokenExpireMinutes: "30"
+  refreshTokenExpireDays: "7"
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+
+postgresql:
+  enabled: true
+  auth:
+    database: auth_db
+    username: auth_user
+    password: staging-password-change-this
+  primary:
+    persistence:
+      enabled: true
+      size: 5Gi
+      storageClass: longhorn

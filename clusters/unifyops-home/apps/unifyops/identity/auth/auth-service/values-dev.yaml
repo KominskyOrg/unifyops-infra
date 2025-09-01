@@ -1,0 +1,73 @@
+# Auth Service - Development Environment Values
+# These values override the base Helm chart for dev environment
+
+global:
+  namespace: uo-dev
+  imageRegistry: harbor.unifyops.io/library
+  imagePullSecrets:
+    - name: harbor-registry
+
+stack:
+  name: auth
+  appType: service
+
+enabled: true
+replicaCount: 1
+
+image:
+  repository: auth-service
+  tag: dev-latest
+  pullPolicy: Always
+
+service:
+  type: ClusterIP
+  port: 8001
+  targetPort: 8001
+
+# Enable ingress for dev testing
+ingress:
+  enabled: true
+  className: nginx-private
+  hosts:
+    - host: dev.unifyops.io
+      paths:
+        - path: /service/auth
+          pathType: Prefix
+  tls:
+    - secretName: dev-unifyops-tls
+      hosts:
+        - dev.unifyops.io
+
+config:
+  # Common config
+  environment: "development"
+  logLevel: "DEBUG"
+  
+  # Service-specific config
+  databaseUrl: "postgresql://auth_user:password@postgres-dev:5432/auth_db"
+  databaseSchema: "auth"
+  
+  # Auth config
+  secretKey: "dev-secret-key-change-in-production"
+  accessTokenExpireMinutes: "30"
+  refreshTokenExpireDays: "7"
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+postgresql:
+  enabled: true
+  auth:
+    database: auth_db
+    username: auth_user
+    password: dev-password-change-this
+  primary:
+    persistence:
+      enabled: true
+      size: 1Gi
+      storageClass: longhorn

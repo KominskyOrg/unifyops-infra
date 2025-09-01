@@ -1,0 +1,70 @@
+# Auth Service - Production Environment Values
+# These values override the base Helm chart for production environment
+
+global:
+  namespace: uo-prod
+  imageRegistry: harbor.unifyops.io/library
+  imagePullSecrets:
+    - name: harbor-registry
+
+stack:
+  name: auth
+  appType: service
+
+enabled: true
+replicaCount: 3
+
+image:
+  repository: auth-service
+  tag: prod-latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8001
+  targetPort: 8001
+
+# Production services are NOT exposed via ingress
+ingress:
+  enabled: false
+
+config:
+  # Common config
+  environment: "production"
+  logLevel: "WARNING"
+  
+  # Service-specific config - use sealed secrets in production
+  databaseUrl: "postgresql://auth_user:PROD_PASSWORD_FROM_SECRET@auth-service-postgresql:5432/auth_db"
+  databaseSchema: "auth"
+  
+  # Auth config - use sealed secrets
+  secretKey: "PROD_SECRET_KEY_FROM_SEALED_SECRET"
+  accessTokenExpireMinutes: "15"
+  refreshTokenExpireDays: "30"
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 512Mi
+  limits:
+    cpu: 2000m
+    memory: 2Gi
+
+postgresql:
+  enabled: true
+  auth:
+    database: auth_db
+    username: auth_user
+    # Use existingSecret in production
+    existingSecret: auth-db-secret
+  primary:
+    persistence:
+      enabled: true
+      size: 20Gi
+      storageClass: longhorn
+  
+  # Production database settings
+  metrics:
+    enabled: true
+  backup:
+    enabled: true

@@ -1,0 +1,63 @@
+# Auth API Gateway - Staging Environment Values
+# These values override the base Helm chart for staging environment
+
+global:
+  namespace: uo-staging
+  imageRegistry: harbor.unifyops.io/library
+  imagePullSecrets:
+    - name: harbor-registry
+
+stack:
+  name: auth
+  appType: api
+
+enabled: true
+replicaCount: 2
+
+image:
+  repository: auth-api
+  tag: staging-latest
+  pullPolicy: Always
+
+service:
+  type: ClusterIP
+  port: 8002
+  targetPort: 8002
+
+ingress:
+  enabled: true
+  className: nginx-private
+  hosts:
+    - host: staging.unifyops.io
+      paths:
+        - path: /api/auth
+          pathType: Prefix
+  tls:
+    - secretName: staging-unifyops-tls
+      hosts:
+        - staging.unifyops.io
+
+config:
+  # Common config
+  apiPort: "8002"
+  environment: "staging"
+  logLevel: "INFO"
+  
+  # API Gateway config
+  serviceUrl: "http://auth-service:8001"
+  
+  # Rate limiting
+  rateLimitPerMinute: "100"
+  corsAllowedOrigins: "https://auth.staging.unifyops.io"
+  
+  # Auth verification endpoint (for other services)
+  authApiUrl: "http://auth-api:8002"
+  authApiPrefix: "/api/auth"
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
