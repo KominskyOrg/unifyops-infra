@@ -6,10 +6,15 @@ metadata:
 spec:
   description: ARC (GitHub Actions Runner Controller) apps
   sourceRepos:
-    - '*'
+    - 'oci://ghcr.io/actions/actions-runner-controller-charts'
+    - 'oci://ghcr.io/actions/actions-runner-scale-set-charts'
   destinations:
-    - namespace: '*'
+    - namespace: arc-systems
+      server: https://kubernetes.default.svc
+    - namespace: github-runners
       server: https://kubernetes.default.svc
   clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
     - group: '*'
       kind: '*'
