@@ -1,0 +1,7 @@
+# clusters/unifyops-home/apps/github-runner/kustomization.yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - app-controller.yaml
+  - app-runners.yaml

@@ -30,3 +30,4 @@ resources:
   - sealed-secret/
   - nginx-private/
   - observability/
+  - github-runner/
