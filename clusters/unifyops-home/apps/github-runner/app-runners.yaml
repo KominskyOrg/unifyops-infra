@@ -1,0 +1,35 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: arc-runners
+  namespace: argocd
+spec:
+  project: arc
+  source:
+    chart: gha-runner-scale-set
+    repoURL: oci://ghcr.io/actions/actions-runner-controller-charts
+    targetRevision: "0.8.0"
+    helm:
+      values: |
+        githubConfigUrl: "https://github.com/KominskyOrg"
+        githubConfigSecret: "github-token"   # name of the Secret
+        containerMode:
+          type: dind                         # if you need Docker builds
+        # optional: align runner min/max
+        minRunners: 0
+        maxRunners: 5
+        # optional labels / group
+        runnerGroup: "default"
+        # If you must reference a specific controller SA:
+        controllerServiceAccount:
+          namespace: arc-systems
+          name: gha-runner-scale-set-controller
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: github-runners
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
