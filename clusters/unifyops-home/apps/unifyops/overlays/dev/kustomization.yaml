@@ -3,6 +3,6 @@ kind: Kustomization
 namespace: uo-dev
 resources:
   - ../../base
-patchesStrategicMerge:
-  - patch-deployment.yaml
   - ingress.yaml
+patches:
+  - path: patch-deployment.yaml
