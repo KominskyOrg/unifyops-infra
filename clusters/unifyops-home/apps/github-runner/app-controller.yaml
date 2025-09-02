@@ -10,8 +10,8 @@ spec:
     repoURL: oci://ghcr.io/actions/actions-runner-controller-charts
     targetRevision: "0.12.1"
     helm:
+      oci: true
       values: |
-        # Use the default controller SA to avoid name mismatches.
         serviceAccount:
           create: true
           name: gha-runner-scale-set-controller

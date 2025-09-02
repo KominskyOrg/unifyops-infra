@@ -6,21 +6,16 @@ metadata:
 spec:
   project: arc
   source:
-    chart: gha-runner-scale-set
     repoURL: oci://ghcr.io/actions/actions-runner-controller-charts
+    chart: gha-runner-scale-set
     targetRevision: "0.12.1"
     helm:
+      oci: true
       values: |
         githubConfigUrl: "https://github.com/KominskyOrg"
-        githubConfigSecret: "github-token"   # name of the Secret
-        containerMode:
-          type: dind                         # if you need Docker builds
-        # optional: align runner min/max
+        githubConfigSecret: "github-token"
         minRunners: 0
         maxRunners: 5
-        # optional labels / group
-        runnerGroup: "default"
-        # If you must reference a specific controller SA:
         controllerServiceAccount:
           namespace: arc-systems
           name: gha-runner-scale-set-controller
