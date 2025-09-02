@@ -1,0 +1,41 @@
+# Auth API Gateway - Staging Environment Overrides
+
+image:
+  tag: staging-latest
+  pullPolicy: Always
+
+replicaCount: 2
+
+ingress:
+  hosts:
+    - host: staging.unifyops.io
+      paths:
+        - path: /api/auth
+          pathType: Prefix
+  tls:
+    - secretName: staging-unifyops-tls
+      hosts:
+        - staging.unifyops.io
+
+config:
+  environment: "staging"
+  logLevel: "INFO"
+  
+  # Staging service URLs
+  serviceUrl: "http://auth-service:8001"
+  
+  # Moderate rate limits for staging
+  rateLimitPerMinute: "60"
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi

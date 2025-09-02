@@ -1,0 +1,32 @@
+# Auth Service - Staging Environment Overrides
+
+image:
+  tag: staging-latest
+  pullPolicy: Always
+
+replicaCount: 2
+
+config:
+  environment: "staging"
+  logLevel: "INFO"
+  
+  # Staging database connection
+  databaseUrl: "postgresql://postgres:stagingpassword@postgres-staging:5432/unifyops"
+  
+  # Staging JWT secrets (still not production)
+  secretKey: "staging-secret-key-change-in-production"
+
+postgresql:
+  auth:
+    postgresPassword: stagingpassword
+  primary:
+    persistence:
+      size: 20Gi
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi

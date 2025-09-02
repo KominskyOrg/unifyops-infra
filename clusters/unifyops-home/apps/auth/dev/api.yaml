@@ -1,0 +1,34 @@
+# Auth API Gateway - Development Environment Overrides
+
+image:
+  tag: dev-latest
+  pullPolicy: Always
+
+ingress:
+  hosts:
+    - host: dev.unifyops.io
+      paths:
+        - path: /api/auth
+          pathType: Prefix
+  tls:
+    - secretName: dev-unifyops-tls
+      hosts:
+        - dev.unifyops.io
+
+config:
+  environment: "development"
+  logLevel: "DEBUG"
+  
+  # Dev service URLs
+  serviceUrl: "http://auth-service:8001"
+  
+  # More permissive rate limits for dev
+  rateLimitPerMinute: "100"
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi

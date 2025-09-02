@@ -1,0 +1,60 @@
+# Auth API Gateway - Production Environment Overrides
+
+image:
+  tag: v1.0.0  # Use specific version tags in production
+  pullPolicy: IfNotPresent
+
+replicaCount: 3
+
+ingress:
+  hosts:
+    - host: api.unifyops.io
+      paths:
+        - path: /api/auth
+          pathType: Prefix
+  tls:
+    - secretName: prod-unifyops-tls
+      hosts:
+        - api.unifyops.io
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+
+config:
+  environment: "production"
+  logLevel: "WARNING"
+  
+  # Production service URLs
+  serviceUrl: "http://auth-service:8001"
+  
+  # Strict rate limits for production
+  rateLimitPerMinute: "30"
+  corsAllowedOrigins: "https://unifyops.io,https://app.unifyops.io"
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 60
+  targetMemoryUtilizationPercentage: 70
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+
+# Anti-affinity for high availability
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - auth-api
+          topologyKey: kubernetes.io/hostname

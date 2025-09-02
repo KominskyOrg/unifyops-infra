@@ -1,0 +1,30 @@
+# Auth App - Development Environment Overrides
+
+image:
+  tag: dev-latest
+  pullPolicy: Always
+
+ingress:
+  hosts:
+    - host: auth-dev.unifyops.io
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: dev-unifyops-tls
+      hosts:
+        - auth-dev.unifyops.io
+
+config:
+  apiUrl: "https://dev.unifyops.io"
+  authAppUrl: "https://auth-dev.unifyops.io"
+  appName: "UnifyOps Auth (Dev)"
+  environment: "development"
+
+resources:
+  requests:
+    cpu: 25m
+    memory: 32Mi
+  limits:
+    cpu: 100m
+    memory: 128Mi

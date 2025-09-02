@@ -1,0 +1,66 @@
+# Auth App - Base Configuration
+# Frontend React application
+
+global:
+  imageRegistry: harbor.unifyops.io/library
+  imagePullSecrets:
+    - name: harbor-registry
+
+stack:
+  name: auth
+  appType: app
+
+enabled: true
+replicaCount: 1
+
+image:
+  repository: auth-app
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 3000
+  targetPort: 80  # Nginx serves on port 80
+
+ingress:
+  enabled: true
+  className: nginx-private
+  hosts:
+    - host: auth.unifyops.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+# Frontend apps typically need minimal resources
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+
+# Frontend config (injected as runtime config)
+config:
+  # API Gateway URL (will be overridden per environment)
+  apiUrl: "http://localhost:8002"
+  authAppUrl: "http://localhost:3000"
+  appName: "UnifyOps Auth"
+
+# Health checks for nginx
+probes:
+  readiness:
+    enabled: true
+    httpGet:
+      path: /
+      port: 80
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  liveness:
+    enabled: true
+    httpGet:
+      path: /
+      port: 80
+    initialDelaySeconds: 10
+    periodSeconds: 20

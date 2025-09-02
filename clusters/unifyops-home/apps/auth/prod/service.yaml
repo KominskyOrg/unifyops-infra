@@ -1,0 +1,47 @@
+# Auth Service - Production Environment Overrides
+
+image:
+  tag: v1.0.0  # Use specific version tags in production
+  pullPolicy: IfNotPresent
+
+replicaCount: 3
+
+config:
+  environment: "production"
+  logLevel: "WARNING"
+  
+  # Production database connection (use external secret in real prod)
+  databaseUrl: "${DATABASE_URL}"  # Injected from secret
+  
+  # Production JWT secrets (use external secret)
+  secretKey: "${JWT_SECRET_KEY}"  # Injected from secret
+
+# Use external database in production
+postgresql:
+  enabled: false
+
+# Production secrets
+secrets:
+  existingSecret: "auth-service-secrets"
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+
+# Anti-affinity for high availability
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - auth-service
+          topologyKey: kubernetes.io/hostname

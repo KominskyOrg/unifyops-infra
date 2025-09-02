@@ -1,0 +1,27 @@
+# Auth Service - Development Environment Overrides
+
+image:
+  tag: dev-latest
+  pullPolicy: Always
+
+config:
+  environment: "development"
+  logLevel: "DEBUG"
+  
+  # Dev database connection
+  databaseUrl: "postgresql://postgres:devpassword@postgres-dev:5432/unifyops"
+  
+  # Dev JWT secrets
+  secretKey: "dev-secret-key-change-in-production"
+
+postgresql:
+  auth:
+    postgresPassword: devpassword
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi

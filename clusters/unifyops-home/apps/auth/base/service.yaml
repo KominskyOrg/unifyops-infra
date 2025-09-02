@@ -1,0 +1,75 @@
+# Auth Service - Base Configuration
+# Backend service with database access
+
+global:
+  imageRegistry: harbor.unifyops.io/library
+  imagePullSecrets:
+    - name: harbor-registry
+
+stack:
+  name: auth
+  appType: service
+
+enabled: true
+replicaCount: 1
+
+image:
+  repository: auth-service
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8001
+  targetPort: 8001
+
+# No ingress for backend services
+ingress:
+  enabled: false
+
+config:
+  # Common config
+  apiPort: "8001"
+  logLevel: "INFO"
+  
+  # Database config (will be overridden per environment)
+  databaseSchema: "auth"
+  
+  # JWT config
+  accessTokenExpireMinutes: "30"
+  refreshTokenExpireDays: "30"
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# PostgreSQL subchart
+postgresql:
+  enabled: true
+  auth:
+    database: unifyops
+    postgresPassword: changeme  # Override in environment-specific values
+  primary:
+    persistence:
+      enabled: true
+      size: 10Gi
+
+# Health checks
+probes:
+  readiness:
+    enabled: true
+    httpGet:
+      path: /service/auth/health
+      port: 8001
+    initialDelaySeconds: 10
+    periodSeconds: 10
+  liveness:
+    enabled: true
+    httpGet:
+      path: /service/auth/health
+      port: 8001
+    initialDelaySeconds: 30
+    periodSeconds: 20

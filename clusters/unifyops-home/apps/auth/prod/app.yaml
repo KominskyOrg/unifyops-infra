@@ -1,0 +1,48 @@
+# Auth App - Production Environment Overrides
+
+image:
+  tag: v1.0.0  # Use specific version tags in production
+  pullPolicy: IfNotPresent
+
+replicaCount: 3
+
+ingress:
+  hosts:
+    - host: app.unifyops.io
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: prod-unifyops-tls
+      hosts:
+        - app.unifyops.io
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+
+config:
+  apiUrl: "https://api.unifyops.io"
+  authAppUrl: "https://app.unifyops.io"
+  appName: "UnifyOps"
+  environment: "production"
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# Anti-affinity for high availability
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - auth-app
+          topologyKey: kubernetes.io/hostname

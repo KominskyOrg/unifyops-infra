@@ -1,0 +1,32 @@
+# Auth App - Staging Environment Overrides
+
+image:
+  tag: staging-latest
+  pullPolicy: Always
+
+replicaCount: 2
+
+ingress:
+  hosts:
+    - host: auth-staging.unifyops.io
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: staging-unifyops-tls
+      hosts:
+        - auth-staging.unifyops.io
+
+config:
+  apiUrl: "https://staging.unifyops.io"
+  authAppUrl: "https://auth-staging.unifyops.io"
+  appName: "UnifyOps Auth (Staging)"
+  environment: "staging"
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi

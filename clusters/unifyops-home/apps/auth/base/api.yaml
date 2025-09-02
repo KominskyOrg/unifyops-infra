@@ -1,0 +1,81 @@
+# Auth API Gateway - Base Configuration
+# API gateway layer for auth service
+
+global:
+  imageRegistry: harbor.unifyops.io/library
+  imagePullSecrets:
+    - name: harbor-registry
+
+stack:
+  name: auth
+  appType: api
+
+enabled: true
+replicaCount: 1
+
+image:
+  repository: auth-api
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8002
+  targetPort: 8002
+
+ingress:
+  enabled: true
+  className: nginx-private
+  hosts:
+    - host: api.unifyops.local
+      paths:
+        - path: /api/auth
+          pathType: Prefix
+  tls: []
+
+config:
+  # Common config
+  apiPort: "8002"
+  logLevel: "INFO"
+  
+  # API Gateway config
+  serviceUrl: "http://auth-service:8001"
+  
+  # Rate limiting
+  rateLimitPerMinute: "60"
+  corsAllowedOrigins: "*"
+  
+  # Auth verification endpoint (for other services)
+  authApiUrl: "http://auth-api:8002"
+  authApiPrefix: "/api/auth"
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# Health checks
+probes:
+  readiness:
+    enabled: true
+    httpGet:
+      path: /api/auth/health
+      port: 8002
+    initialDelaySeconds: 10
+    periodSeconds: 10
+  liveness:
+    enabled: true
+    httpGet:
+      path: /api/auth/health
+      port: 8002
+    initialDelaySeconds: 30
+    periodSeconds: 20
+
+# Autoscaling for API gateway
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
