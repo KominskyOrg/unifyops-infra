@@ -42,8 +42,9 @@ spec:
       project: apps
       sources:
         # Helm chart source (from Git for now, will switch to Harbor when it's working)
-        - repoURL: harbor.unifyops.io/library/unifyops-stack
-          path: .
+        - repoURL: https://github.com/KominskyOrg/unifyops-infra.git
+          targetRevision: '{{branch}}'
+          path: apps/unifyops-stack
           helm:
             valueFiles:
               - $values/clusters/unifyops-home/apps/unifyops/identity/auth/auth-{{appType}}/values-{{env}}.yaml
