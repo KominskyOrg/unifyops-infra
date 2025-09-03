@@ -42,8 +42,7 @@ spec:
       project: apps
       sources:
         # Helm chart source (from Git for now, will switch to Harbor when it's working)
-        - repoURL: https://github.com/KominskyOrg/unifyops-helm.git
-          targetRevision: main
+        - repoURL: harbor.unifyops.io/library/unifyops-stack
           path: .
           helm:
             valueFiles:
