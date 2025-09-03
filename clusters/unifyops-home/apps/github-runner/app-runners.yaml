@@ -11,6 +11,7 @@ spec:
     targetRevision: "0.12.1"
     helm:
       oci: true
+      passCredentials: true
       values: |
         githubConfigUrl: "https://github.com/KominskyOrg"
         githubConfigSecret: "github-token"
