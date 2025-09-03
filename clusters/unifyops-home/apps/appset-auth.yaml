@@ -7,30 +7,28 @@ spec:
   generators:
     - matrix:
         generators:
-          # Environment generator
           - list:
               elements:
-                - env: dev
-                  branch: dev
-                  namespace: uo-dev
-                  syncPolicy: auto
-                - env: staging
-                  branch: staging
-                  namespace: uo-staging
-                  syncPolicy: auto
-                - env: prod
-                  branch: main
-                  namespace: uo-prod
-                  syncPolicy: manual  # Manual sync for production
-          # App type generator
+                - env: "dev"
+                  branch: "dev"
+                  namespace: "uo-dev"
+                  syncPolicy: "auto"
+                - env: "staging"
+                  branch: "staging"
+                  namespace: "uo-staging"
+                  syncPolicy: "auto"
+                - env: "prod"
+                  branch: "main"
+                  namespace: "uo-prod"
+                  syncPolicy: "manual"
           - list:
               elements:
-                - appType: service
-                  port: 8001
-                - appType: api
-                  port: 8002
-                - appType: app
-                  port: 3000
+                - appType: "service"
+                  port: "8001"   # quoted
+                - appType: "api"
+                  port: "8002"   # quoted
+                - appType: "app"
+                  port: "3000"   # quoted
   template:
     metadata:
       name: '{{env}}-auth-{{appType}}'
@@ -41,14 +39,12 @@ spec:
     spec:
       project: apps
       sources:
-        # Helm chart source (from Git for now, will switch to Harbor when it's working)
         - repoURL: https://github.com/KominskyOrg/unifyops-infra.git
           targetRevision: '{{branch}}'
           path: apps/unifyops-stack
           helm:
             valueFiles:
               - $values/clusters/unifyops-home/apps/unifyops/identity/auth/auth-{{appType}}/values-{{env}}.yaml
-        # Values file source
         - repoURL: https://github.com/KominskyOrg/unifyops-infra.git
           targetRevision: '{{branch}}'
           ref: values
