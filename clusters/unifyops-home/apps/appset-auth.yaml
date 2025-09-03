@@ -33,7 +33,7 @@ spec:
                   port: 3000
   template:
     metadata:
-      name: 'auth-{{appType}}-{{env}}'
+      name: '{{env}}-auth-{{appType}}'
       labels:
         stack: auth
         appType: '{{appType}}'
