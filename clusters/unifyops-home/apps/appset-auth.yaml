@@ -39,9 +39,9 @@ spec:
     spec:
       project: apps
       sources:
-        - repoURL: https://github.com/KominskyOrg/unifyops-infra.git
+        - repoURL: https://github.com/KominskyOrg/unifyops-helm.git
           targetRevision: '{{branch}}'
-          path: apps/unifyops-stack
+          path: .
           helm:
             valueFiles:
               - $values/clusters/unifyops-home/apps/unifyops/identity/auth/auth-{{appType}}/values-{{env}}.yaml

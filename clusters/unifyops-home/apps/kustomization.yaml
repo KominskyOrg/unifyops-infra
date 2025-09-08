@@ -32,3 +32,4 @@ resources:
   - nginx-private/
   - observability/
   - github-runner/
+  - trilium/
