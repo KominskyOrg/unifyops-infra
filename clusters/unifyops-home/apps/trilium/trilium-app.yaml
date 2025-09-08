@@ -20,6 +20,11 @@ spec:
             type: deployment
             replicas: 1
             strategy: Recreate
+            pod:
+              securityContext:
+                runAsUser: 1000
+                runAsGroup: 1000
+                fsGroup: 1000
             containers:
               main:
                 image:
@@ -28,6 +33,7 @@ spec:
                   pullPolicy: IfNotPresent
                 env:
                   TZ: UTC
+                  TRILIUM_DATA_DIR: /home/node/trilium-data
                 resources:
                   requests:
                     cpu: 100m
@@ -78,16 +84,6 @@ spec:
             existingClaim: trilium-data-pvc
             globalMounts:
               - path: /home/node/trilium-data
-
-        # Trilium configuration
-        configini:
-          general:
-            instanceName: "Trilium (UnifyOps)"
-            noBackup: false
-          network:
-            host: "0.0.0.0"
-            port: 8080
-            trustedReverseProxy: true
 
         # Service configuration
         service:
