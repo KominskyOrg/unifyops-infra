@@ -16,12 +16,59 @@ spec:
       values: |
         controllers:
           main:
+            enabled: true
+            type: deployment
+            replicas: 1
+            strategy: Recreate
             containers:
-              trilium:
+              main:
                 image:
                   repository: triliumnext/notes
                   tag: v0.92.4
                   pullPolicy: IfNotPresent
+                env:
+                  TZ: UTC
+                resources:
+                  requests:
+                    cpu: 100m
+                    memory: 256Mi
+                  limits:
+                    cpu: 1000m
+                    memory: 2Gi
+                probes:
+                  liveness:
+                    enabled: true
+                    type: HTTP
+                    spec:
+                      httpGet:
+                        path: /api/health
+                        port: 8080
+                      initialDelaySeconds: 30
+                      periodSeconds: 10
+                      timeoutSeconds: 5
+                      failureThreshold: 3
+                  readiness:
+                    enabled: true
+                    type: HTTP
+                    spec:
+                      httpGet:
+                        path: /api/health
+                        port: 8080
+                      initialDelaySeconds: 10
+                      periodSeconds: 10
+                      timeoutSeconds: 5
+                      failureThreshold: 3
+                  startup:
+                    enabled: true
+                    type: HTTP
+                    spec:
+                      httpGet:
+                        path: /api/health
+                        port: 8080
+                      initialDelaySeconds: 0
+                      periodSeconds: 10
+                      timeoutSeconds: 5
+                      failureThreshold: 30
 
         # Persist Trilium's data on Longhorn
         persistence:
@@ -29,6 +76,8 @@ spec:
             enabled: true
             type: persistentVolumeClaim
             existingClaim: trilium-data-pvc
+            globalMounts:
+              - path: /home/node/trilium-data
 
         # Trilium configuration
         configini:
@@ -43,6 +92,7 @@ spec:
         # Service configuration
         service:
           main:
+            controller: main
             ports:
               http:
                 port: 8080
@@ -51,12 +101,15 @@ spec:
         ingress:
           main:
             enabled: true
-            ingressClassName: nginx-private
+            className: nginx-private
             hosts:
               - host: notes.unifyops.io
                 paths:
                   - path: /
                     pathType: Prefix
+                    service:
+                      identifier: main
+                      port: http
             tls:
               - secretName: notes-unifyops-io-tls
                 hosts:
