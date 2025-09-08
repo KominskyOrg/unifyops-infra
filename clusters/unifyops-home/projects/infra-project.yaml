@@ -20,6 +20,7 @@ spec:
     - 'https://prometheus-community.github.io/helm-charts'
     - 'https://grafana.github.io/helm-charts'
     - 'https://github.com/prometheus-operator/prometheus-operator'
+    - 'https://triliumnext.github.io/helm-charts'
   destinations:
     - namespace: '*'
       server: https://kubernetes.default.svc
