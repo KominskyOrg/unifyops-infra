@@ -1,0 +1,87 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: trilium
+  namespace: argocd
+  labels:
+    app: trilium
+    stack: productivity
+spec:
+  project: apps
+  source:
+    repoURL: https://triliumnext.github.io/helm-charts
+    chart: trilium
+    targetRevision: 1.3.0
+    helm:
+      values: |
+        controllers:
+          main:
+            containers:
+              trilium:
+                image:
+                  repository: triliumnext/notes
+                  tag: v0.92.4
+                  pullPolicy: IfNotPresent
+
+        # Persist Trilium's data on Longhorn
+        persistence:
+          data:
+            enabled: true
+            type: persistentVolumeClaim
+            existingClaim: trilium-data-pvc
+
+        # Trilium configuration
+        configini:
+          general:
+            instanceName: "Trilium (UnifyOps)"
+            noBackup: false
+          network:
+            host: "0.0.0.0"
+            port: 8080
+            trustedReverseProxy: true
+
+        # Service configuration
+        service:
+          main:
+            ports:
+              http:
+                port: 8080
+
+        # Ingress configuration
+        ingress:
+          main:
+            enabled: true
+            ingressClassName: nginx-private
+            hosts:
+              - host: notes.unifyops.io
+                paths:
+                  - path: /
+                    pathType: Prefix
+            tls:
+              - secretName: notes-unifyops-io-tls
+                hosts:
+                  - notes.unifyops.io
+            annotations:
+              cert-manager.io/cluster-issuer: letsencrypt-prod
+              external-dns.alpha.kubernetes.io/hostname: notes.unifyops.io
+              nginx.ingress.kubernetes.io/ssl-redirect: "true"
+              nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+              nginx.ingress.kubernetes.io/proxy-connect-timeout: "600"
+              nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+              nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: notes
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
