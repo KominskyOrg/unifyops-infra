@@ -20,53 +20,30 @@ spec:
             type: deployment
             replicas: 1
             strategy: Recreate
+            # Do NOT force runAsNonRoot or runAsUser; let the image start as root and drop privileges itself
             pod:
-              securityContext:
-                runAsUser: 1000
-                runAsGroup: 1000
-                fsGroup: 1000
-                fsGroupChangePolicy: OnRootMismatch
-            initContainers:
-              init-permissions:
-                image:
-                  repository: busybox
-                  tag: latest
-                command:
-                  - sh
-                  - -c
-                  - |
-                    mkdir -p /home/node/trilium-data
-                    chown -R 1000:1000 /home/node/trilium-data
-                    chmod -R 755 /home/node/trilium-data
-                securityContext:
-                  runAsUser: 0
-                  runAsNonRoot: false
+              securityContext: {}   # important: leave empty
             containers:
-              main:
+              trilium:
                 image:
                   repository: triliumnext/notes
                   tag: v0.92.4
                   pullPolicy: IfNotPresent
                 env:
-                  TZ: UTC
-                  TRILIUM_DATA_DIR: /home/node/trilium-data
                   USER_UID: "1000"
                   USER_GID: "1000"
+                  TZ: "UTC"
+                  # TRILIUM_DATA_DIR optional if you mount at default
+                  # TRILIUM_DATA_DIR: /home/node/trilium-data
                 securityContext:
-                  runAsUser: 1000
-                  runAsGroup: 1000
-                  runAsNonRoot: true
-                  allowPrivilegeEscalation: false
+                  # don't set runAsNonRoot / runAsUser here; let entrypoint handle it
                   readOnlyRootFilesystem: false
-                  capabilities:
-                    drop:
-                      - ALL
                 resources:
                   requests:
                     cpu: 100m
                     memory: 256Mi
                   limits:
-                    cpu: 1000m
+                    cpu: "1"
                     memory: 2Gi
                 probes:
                   liveness:
@@ -109,10 +86,10 @@ spec:
             enabled: true
             type: persistentVolumeClaim
             existingClaim: trilium-data-pvc
+            # mount to the image’s default data dir
             globalMounts:
               - path: /home/node/trilium-data
 
-        # Service configuration
         service:
           main:
             controller: main
@@ -120,7 +97,6 @@ spec:
               http:
                 port: 8080
 
-        # Ingress configuration
         ingress:
           main:
             enabled: true
@@ -135,16 +111,22 @@ spec:
                       port: http
             tls:
               - secretName: notes-unifyops-io-tls
-                hosts:
-                  - notes.unifyops.io
+                hosts: [notes.unifyops.io]
             annotations:
               cert-manager.io/cluster-issuer: letsencrypt-prod
               external-dns.alpha.kubernetes.io/hostname: notes.unifyops.io
               nginx.ingress.kubernetes.io/ssl-redirect: "true"
-              nginx.ingress.kubernetes.io/proxy-body-size: "100m"
-              nginx.ingress.kubernetes.io/proxy-connect-timeout: "600"
-              nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
-              nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+
+        # Optional: Trilium config.ini managed by the chart
+        configini:
+          general:
+            instanceName: "Trilium (UnifyOps)"
+            noBackup: false
+          network:
+            host: "0.0.0.0"
+            port: 8080
+            trustedReverseProxy: true
+
   destination:
     server: https://kubernetes.default.svc
     namespace: notes
