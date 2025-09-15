@@ -6,7 +6,7 @@ metadata:
 spec:
   sourceRepos:
     - 'https://github.com/KominskyOrg/unifyops-infra.git'
-    - 'http://harbor-core.harbor-system.svc.cluster.local/chartrepo/*'
+    - 'oci://harbor-core.harbor-system.svc.cluster.local/chartrepo/*'
   destinations:
     - namespace: uo-*
       server: https://kubernetes.default.svc
