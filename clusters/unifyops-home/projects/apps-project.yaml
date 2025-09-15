@@ -6,8 +6,7 @@ metadata:
 spec:
   sourceRepos:
     - 'https://github.com/KominskyOrg/unifyops-infra.git'
-    - 'https://github.com/KominskyOrg/unifyops.git'
-    - 'https://github.com/KominskyOrg/unifyops-helm.git'
+    - 'https://harbor.unifyops.io/chartrepo/library'
   destinations:
     - namespace: uo-*
       server: https://kubernetes.default.svc
