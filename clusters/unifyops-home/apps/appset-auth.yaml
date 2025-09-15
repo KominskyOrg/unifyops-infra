@@ -39,7 +39,7 @@ spec:
     spec:
       project: apps
       sources:
-        - repoURL: http://harbor-core.harbor-system.svc.cluster.local/chartrepo/library
+        - repoURL: http://harbor-core.harbor-system.svc.cluster.local/chartrepo/{{env}}-auth
           chart: auth-{{appType}}
           targetRevision: "*"
           helm:
