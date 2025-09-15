@@ -39,13 +39,12 @@ spec:
     spec:
       project: apps
       sources:
-        - repoURL: https://github.com/KominskyOrg/unifyops-helm.git
-          targetRevision: '{{branch}}'
-          path: .
+        - repoURL: https://harbor.unifyops.io/chartrepo/library
+          chart: auth-{{appType}}
+          targetRevision: "*"
           helm:
             valueFiles:
-              - $values/clusters/unifyops-home/apps/unifyops/base/{{appType}}.yaml
-              - $values/clusters/unifyops-home/apps/unofyops/identity/auth/auth-{{appType}}/{{env}}.yaml
+              - $values/clusters/unifyops-home/apps/unifyops/identity/auth/auth-{{appType}}/values-{{env}}.yaml
         - repoURL: https://github.com/KominskyOrg/unifyops-infra.git
           targetRevision: '{{branch}}'
           ref: values
