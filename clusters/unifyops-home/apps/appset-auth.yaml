@@ -39,8 +39,8 @@ spec:
     spec:
       project: apps
       sources:
-        - repoURL: http://harbor-core.harbor-system.svc.cluster.local/chartrepo/{{env}}-auth
-          chart: auth-{{appType}}
+        - repoURL: http://harbor-core.harbor-system.svc.cluster.local/chartrepo/library
+          chart: unifyops-stack
           targetRevision: "*"
           helm:
             valueFiles:
