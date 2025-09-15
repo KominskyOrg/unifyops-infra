@@ -39,7 +39,7 @@ spec:
     spec:
       project: apps
       sources:
-        - repoURL: oci://harbor-core.harbor-system.svc.cluster.local/library
+        - repoURL: oci://harbor.unifyops.io/library
           chart: unifyops-stack
           targetRevision: "*"
           helm:
