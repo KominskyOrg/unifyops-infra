@@ -39,8 +39,8 @@ spec:
     spec:
       project: apps
       sources:
-        - repoURL: oci://harbor.unifyops.io
-          chart: library/unifyops-stack
+        - repoURL: oci://harbor.unifyops.io/library/unifyops-stack
+          chart: unifyops-stack
           targetRevision: "0.1.0"
           helm:
             valueFiles:
