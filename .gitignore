@@ -42,3 +42,33 @@ terraform.rc
 # Raw secrets (should be sealed)
 *-raw.yaml
 *-unsealed.yaml
+
+# Additional secret protection patterns
+*.secret
+*.secret.yaml
+*.secret.yml
+*-secret-backup.yaml
+*-secret-backup.yml
+
+# Password and credential files
+*.password
+*.pwd
+passwords.txt
+credentials.txt
+
+# Environment files that might contain secrets
+.env
+.env.*
+*.env
+
+# Decoded or exported secrets
+decoded-*.yaml
+decoded-*.yml
+*-decoded.yaml
+*-decoded.yml
+exported-secrets/
+
+# Temporary secret directories
+/tmp-secrets/
+/secrets/
+/credentials/
