@@ -1,65 +1,63 @@
-# Auth Frontend App - Staging Environment Values
-# These values override the base Helm chart for staging environment
+# Frontend App Deployment Values for Auth
+# Uses the simplified appType-driven approach
+# Usage: helm install auth-app uo-infra-helm/ -f app-values.yaml
 
+# Global configuration
 global:
-  namespace: uo-staging
-  imageRegistry: harbor.unifyops.io/library
+  namespace: "uo-staging"
+  imageRegistry: "harbor.unifyops.io/library"
   imagePullSecrets:
     - name: harbor-registry
 
+# Stack configuration - Drives everything
 stack:
   name: auth
-  appType: app
+  appType: app  # Frontend application type
 
+# Main deployment configuration
 enabled: true
-replicaCount: 1
+replicaCount: 2
 
+# Image configuration
 image:
-  repository: auth-app
-  tag: staging-latest
-  pullPolicy: Always
+  repository: "auth-app"
+  tag: "staging-latest"  # Override: --set image.tag=v1.0.0
+  pullPolicy: IfNotPresent
 
+# Service configuration
 service:
   type: ClusterIP
-  port: 3000
-  targetPort: 3000
+  port: 3000        # Standard web port
+  targetPort: 3000  # Nginx or app server port
+  annotations: {}
 
-ingress:
-  enabled: true
-  className: nginx-private
-  annotations:
-    nginx.ingress.kubernetes.io/gzip: "true"
-    nginx.ingress.kubernetes.io/gzip-types: "text/css text/javascript application/javascript application/json"
-  hosts:
-    - host: staging.unifyops.io
-      paths:
-        - path: /
-          pathType: Prefix
-  tls:
-    - secretName: staging-unifyops-tls
-      hosts:
-        - staging.unifyops.io
-
-secrets:
-  jwtSecret: ""
-  existingSecret: ""
-  existingSecretJwtKey: "jwt-secret"
-
+# Configuration for Frontend App
 config:
   # Common config
-  apiPort: "3000"
+  apiPort: "3000"  # Frontend usually serves on port 80
   environment: "staging"
-
+  
   # App-specific config
   apiUrl: "http://auth-api:8002"
-
+  
   # Additional frontend config
   appTitle: "Auth Management"
   appVersion: "1.0.0"
   featureFlags: "new-ui,dark-mode"
+  # Add custom config as needed
+
+# Resources for Frontend (typically lighter than backend)
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
 
 # Health checks
 probes:
+  # Startup probe for SPAs that need build time
   startup:
     enabled: true
     httpGet:
@@ -76,6 +74,8 @@ probes:
       port: 3000
     initialDelaySeconds: 5
     periodSeconds: 10
+    timeoutSeconds: 1
+    failureThreshold: 3
   liveness:
     enabled: true
     httpGet:
@@ -83,31 +83,19 @@ probes:
       port: 3000
     initialDelaySeconds: 15
     periodSeconds: 20
+    timeoutSeconds: 1
+    failureThreshold: 3
 
-resources:
-  requests:
-    cpu: 50m
-    memory: 64Mi
-  limits:
-    cpu: 200m
-    memory: 256Mi
+# Autoscaling - Usually not needed for frontends
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 80
 
-# Frontend-specific: volumes for nginx
-volumes:
-  - name: nginx-cache
-    emptyDir: {}
-  - name: nginx-run
-    emptyDir: {}
-  - name: nginx-log
-    emptyDir: {}
-
-volumeMounts:
-  - name: nginx-cache
-    mountPath: /var/cache/nginx
-  - name: nginx-run
-    mountPath: /var/run
-  - name: nginx-log
-    mountPath: /var/log/nginx
+# Observability - Not typically used for frontend apps
+observability:
+  enabled: false
 
 # Additional environment variables
 env:
@@ -116,15 +104,83 @@ env:
   - name: PUBLIC_URL
     value: "/"
 
-# No database for frontend
+# Placement
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Volumes for nginx temporary directories (required for read-only filesystem)
+volumes:
+  - name: nginx-cache
+    emptyDir: {}
+  - name: nginx-run
+    emptyDir: {}
+  - name: nginx-log
+    emptyDir: {}
+
+# Volume mounts for nginx directories
+volumeMounts:
+  - name: nginx-cache
+    mountPath: /var/cache/nginx
+  - name: nginx-run
+    mountPath: /var/run
+  - name: nginx-log
+    mountPath: /var/log/nginx
+
+# Ingress - Automatically enabled for app appType
+ingress:
+  enabled: true
+  className: "nginx-private"
+  annotations:
+    nginx.ingress.kubernetes.io/gzip: "true"
+    nginx.ingress.kubernetes.io/gzip-types: "text/css text/javascript application/javascript application/json"
+  hosts:
+    - host: staging.unifyops.io
+      paths:
+        # Auth app serves at root path - handled by Makefile
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: staging-unifyops-tls
+      hosts:
+        - staging.unifyops.io
+
+# Network policies
+networkPolicy:
+  enabled: true
+  defaultDeny:
+    ingress: false  # App needs to accept external traffic
+    egress: false   # App needs to call API
+
+# ServiceAccount
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# Pod Security contexts
+podSecurityContext:
+  fsGroup: 1000
+  runAsNonRoot: true
+  runAsUser: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# Note: PostgreSQL and Secrets are NOT included for Frontend Apps
+# Frontends don't need databases or secrets 
 postgresql:
   enabled: false
+secrets:
+  jwtSecret: ""  # Not used by frontend apps
+  existingSecret: ""
+  existingSecretJwtKey: "jwt-secret"
 database:
   waitForReady: false
   readinessTimeout: 0
-# Network policies
-networkPolicy:
-  enabled: false
-  defaultDeny:
-    ingress: false
-    egress: false

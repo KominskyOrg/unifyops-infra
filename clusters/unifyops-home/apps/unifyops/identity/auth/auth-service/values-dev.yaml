@@ -1,112 +1,224 @@
-# Auth Service - Development Environment Values
-# These values override the base Helm chart for dev environment
+# Simplified Service Deployment Values for Authentication Service
+# This uses the new simplified approach with single deployment based on appType
+# Usage: helm install auth-service uo-infra-helm/ -f deployment-values.yaml
 
+# Global configuration
 global:
-  namespace: uo-dev
-  imageRegistry: harbor.unifyops.io/library
+  namespace: "uo-dev"
+  imageRegistry: "harbor.unifyops.io/library"
   imagePullSecrets:
     - name: harbor-registry
 
+# Stack configuration - This drives everything
 stack:
   name: auth
-  appType: service
+  appType: service  # This determines the deployment type: app, api, or service
 
+# Main deployment configuration (adapts based on appType)
 enabled: true
 replicaCount: 1
 
+# Image configuration
 image:
-  repository: auth-service
-  tag: dev-latest
+  repository: "auth-service"
+  tag: "dev-latest"
   pullPolicy: Always
 
+# Service configuration
 service:
   type: ClusterIP
-  port: 8001
-  targetPort: 8001
+  port: 8001      # External port
+  targetPort: 8001 # Container port
+  annotations: {}
 
-# Enable ingress for dev testing
-ingress:
-  enabled: true
-  className: nginx-private
-  hosts:
-    - host: dev.unifyops.io
-      paths:
-        - path: /service/auth
-          pathType: Prefix
-  tls:
-    - secretName: dev-unifyops-tls
-      hosts:
-        - dev.unifyops.io
-
-secrets:
-  jwtSecret: "dev-jwt-secret-key"
-  existingSecret: ""
-  existingSecretJwtKey: "jwt-secret"
-
+# Configuration (adapts based on appType)
 config:
-  # Common config
+  # Common config for all appTypes
   apiPort: "8001"
   environment: "development"
-  logLevel: "DEBUG"
+  
+  # Service-specific config (only used when appType=service)
+  databaseSchema: "{{ .Values.stack.name }}"
+  skipMigrations: "false"
   logStyle: "otel"
   enableOtelLogging: "true"
+  logLevel: "debug"  # Temporary for troubleshooting migrations
+  
+  # API-specific config (only used when appType=api)
+  # serviceUrl: "http://identity-service:8001"
+  
+  # App-specific config (only used when appType=app)
+  # apiUrl: "http://identity-api:8000"
+  
+  # Add any custom config here - will be auto-added to ConfigMap
+  # customFeatureFlag: "enabled"
 
-  # Service-specific config
-  databaseSchema: "auth"
-  skipMigrations: "false"
-
-  # Auth config
-  secretKey: "dev-secret-key-change-in-production"
-  accessTokenExpireMinutes: "30"
-  refreshTokenExpireDays: "7"
-
-# Database configuration
+# Database configuration (only used when appType=service)
 database:
-  enabled: true
-  url: "postgresql://postgres:postgres@auth-service-postgresql:5432/auth_db"
+  enabled: true  # Can disable if service doesn't need DB
+  url: "postgresql://postgres:postgres@{{ .Values.stack.name }}-service-postgresql:5432/{{ .Values.stack.name }}_db"
   external:
     enabled: false
+    # host: "external-db.example.com"
+    # port: 5432
+    # database: "identity_db"
+    # username: "identity_user"
+    # existingSecret: "identity-db-secret"
+    # existingSecretPasswordKey: "password"
+
+# Resource limits
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
 
 # Health checks
 probes:
   readiness:
     enabled: true
     httpGet:
-      path: "/service/auth/health"
+      path: "/{{ .Values.stack.appType }}/{{ .Values.stack.name }}/health"
       port: 8001
     initialDelaySeconds: 10
     periodSeconds: 10
   liveness:
     enabled: true
     httpGet:
-      path: "/service/auth/health"
+      path: "/{{ .Values.stack.appType }}/{{ .Values.stack.name }}/health"
       port: 8001
     initialDelaySeconds: 30
     periodSeconds: 20
+  # Startup probe (optional, mainly for apps)
+  # startup:
+  #   enabled: false
 
-resources:
-  requests:
-    cpu: 100m
-    memory: 128Mi
-  limits:
-    cpu: 500m
-    memory: 512Mi
+# Autoscaling
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
 
+# Observability (only works for api/service appTypes)
+observability:
+  enabled: true
+  otelExporterOtlpEndpoint: "http://otel-collector-daemonset-collector.observability.svc.cluster.local:4317"
+  otelExporterOtlpInsecure: "true"
+  serviceVersion: "1.0.0"
+  deploymentEnvironment: "development"
+  httpCaptureHeaders:
+    request: "content-type,accept,authorization"
+    response: "content-type"
+  annotations:
+    instrumentation.opentelemetry.io/inject-python: "observability/traces-instrumentation"
+    instrumentation.opentelemetry.io/otel-python-platform: "glibc"
+
+# Additional environment variables
+env: []
+# - name: CUSTOM_FEATURE_FLAG
+#   value: "enabled"
+# - name: EXTERNAL_API_KEY
+#   valueFrom:
+#     secretKeyRef:
+#       name: external-api-secret
+#       key: api-key
+
+# Placement
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Ingress configuration (automatically ignored for service appType)
+ingress:
+  enabled: false  # Services typically don't need ingress
+  className: "nginx-private"
+  annotations: {}
+  hosts:
+    - host: dev.unifyops.io
+      paths:
+        - path: "/{{ .Values.stack.appType }}/{{ .Values.stack.name }}"
+          pathType: Prefix
+  tls: []
+
+# Secrets (used by api/service appTypes)
+secrets:
+  jwtSecret: "your-super-secret-key"
+  existingSecret: ""
+  existingSecretJwtKey: "jwt-secret"
+
+# PostgreSQL subchart (only deployed when appType=service and database.enabled=true)
 postgresql:
   enabled: true
   auth:
-    database: auth_db
-    username: auth_user
-    password: dev-password-change-this
+    postgresPassword: "postgres"
+    username: "postgres"
+    password: "postgres"
+    database: "auth_db"  # Will be overridden by Makefile: $(STACK)_db
   primary:
     persistence:
       enabled: true
       size: 1Gi
       storageClass: longhorn
+    # Standard Kubernetes security context - works across all environments
+    podSecurityContext:
+      fsGroup: 1001  # Ensures volume is mounted with correct group ownership
+    containerSecurityContext:
+      runAsUser: 1001
+      runAsNonRoot: true
+    # Universal init container approach for permission fixes
+    initContainers:
+      - name: volume-permissions
+        image: busybox:1.35
+        command: ['sh', '-c', 'chown -R 1001:1001 /bitnami/postgresql && chmod -R 755 /bitnami/postgresql']
+        securityContext:
+          runAsUser: 0
+        volumeMounts:
+          - name: data
+            mountPath: /bitnami/postgresql
+    resources:
+      requests:
+        cpu: 250m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    initdb:
+      scripts:
+        init.sql: |
+          CREATE SCHEMA IF NOT EXISTS auth;
+          GRANT ALL PRIVILEGES ON SCHEMA auth TO postgres;
+  fullnameOverride: "auth-service-postgresql"
 
 # Network policies
 networkPolicy:
-  enabled: false
+  enabled: true
   defaultDeny:
-    ingress: false
-    egress: false
+    ingress: true
+    egress: true
+
+# ServiceAccount
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# Pod Security contexts
+podSecurityContext:
+  fsGroup: 1000
+  runAsNonRoot: true
+  runAsUser: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# Common labels
+commonLabels: {} 

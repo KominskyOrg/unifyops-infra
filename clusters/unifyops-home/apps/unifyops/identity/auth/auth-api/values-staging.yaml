@@ -67,7 +67,7 @@ resources:
 
 # Network policies
 networkPolicy:
-  enabled: false
+  enabled: true
   defaultDeny:
     ingress: false
     egress: false
