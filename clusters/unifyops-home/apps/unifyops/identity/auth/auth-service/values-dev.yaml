@@ -152,6 +152,8 @@ secrets:
 # PostgreSQL subchart (only deployed when appType=service and database.enabled=true)
 postgresql:
   enabled: true
+  global:
+    imageRegistry: ""  # Override the global registry for PostgreSQL
   image:
     registry: docker.io
     repository: bitnami/postgresql
