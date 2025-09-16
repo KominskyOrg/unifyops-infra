@@ -122,3 +122,9 @@ postgresql:
 database:
   waitForReady: false
   readinessTimeout: 0
+# Network policies
+networkPolicy:
+  enabled: false
+  defaultDeny:
+    ingress: false
+    egress: false

@@ -64,3 +64,10 @@ resources:
   limits:
     cpu: 1000m
     memory: 1Gi
+
+# Network policies
+networkPolicy:
+  enabled: false
+  defaultDeny:
+    ingress: false
+    egress: false

@@ -71,3 +71,10 @@ postgresql:
     enabled: true
   backup:
     enabled: true
+
+# Network policies
+networkPolicy:
+  enabled: false
+  defaultDeny:
+    ingress: false
+    egress: false

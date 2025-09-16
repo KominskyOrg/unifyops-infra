@@ -103,3 +103,10 @@ postgresql:
       enabled: true
       size: 1Gi
       storageClass: longhorn
+
+# Network policies
+networkPolicy:
+  enabled: false
+  defaultDeny:
+    ingress: false
+    egress: false
