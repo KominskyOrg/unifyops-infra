@@ -37,22 +37,44 @@ ingress:
       hosts:
         - dev.unifyops.io
 
+secrets:
+  jwtSecret: "dev-jwt-secret-key"
+  existingSecret: ""
+  existingSecretJwtKey: "jwt-secret"
+
 config:
   # Common config
   apiPort: "8002"
   environment: "development"
   logLevel: "DEBUG"
-  
+
   # API Gateway config
   serviceUrl: "http://auth-service:8001"
-  
+
   # Rate limiting
   rateLimitPerMinute: "60"
   corsAllowedOrigins: "*"
-  
+
   # Auth verification endpoint (for other services)
   authApiUrl: "http://auth-api:8002"
   authApiPrefix: "/api/auth"
+
+# Health checks
+probes:
+  readiness:
+    enabled: true
+    httpGet:
+      path: "/api/auth/health"
+      port: 8002
+    initialDelaySeconds: 10
+    periodSeconds: 10
+  liveness:
+    enabled: true
+    httpGet:
+      path: "/api/auth/health"
+      port: 8002
+    initialDelaySeconds: 30
+    periodSeconds: 20
 
 resources:
   requests:

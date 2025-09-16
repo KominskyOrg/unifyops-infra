@@ -26,6 +26,9 @@ service:
 
 # Production services are NOT exposed via ingress
 ingress:
+
+secrets:
+  existingSecret: null
   enabled: false
 
 config:

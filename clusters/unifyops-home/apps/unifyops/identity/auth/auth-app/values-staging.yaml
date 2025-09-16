@@ -1,8 +1,8 @@
-# Auth Frontend App - Development Environment Values
-# These values override the base Helm chart for dev environment
+# Auth Frontend App - Staging Environment Values
+# These values override the base Helm chart for staging environment
 
 global:
-  namespace: uo-dev
+  namespace: uo-staging
   imageRegistry: harbor.unifyops.io/library
   imagePullSecrets:
     - name: harbor-registry
@@ -16,7 +16,7 @@ replicaCount: 1
 
 image:
   repository: auth-app
-  tag: dev-latest
+  tag: staging-latest
   pullPolicy: Always
 
 service:
@@ -31,14 +31,14 @@ ingress:
     nginx.ingress.kubernetes.io/gzip: "true"
     nginx.ingress.kubernetes.io/gzip-types: "text/css text/javascript application/javascript application/json"
   hosts:
-    - host: dev.unifyops.io
+    - host: staging.unifyops.io
       paths:
         - path: /
           pathType: Prefix
   tls:
-    - secretName: dev-unifyops-tls
+    - secretName: staging-unifyops-tls
       hosts:
-        - dev.unifyops.io
+        - staging.unifyops.io
 
 secrets:
   jwtSecret: ""
@@ -48,7 +48,7 @@ secrets:
 config:
   # Common config
   apiPort: "3000"
-  environment: "development"
+  environment: "staging"
 
   # App-specific config
   apiUrl: "http://auth-api:8002"

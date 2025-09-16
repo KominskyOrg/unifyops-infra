@@ -1,8 +1,8 @@
-# Auth Frontend App - Development Environment Values
-# These values override the base Helm chart for dev environment
+# Auth Frontend App - Production Environment Values
+# These values override the base Helm chart for prod environment
 
 global:
-  namespace: uo-dev
+  namespace: uo-prod
   imageRegistry: harbor.unifyops.io/library
   imagePullSecrets:
     - name: harbor-registry
@@ -12,12 +12,12 @@ stack:
   appType: app
 
 enabled: true
-replicaCount: 1
+replicaCount: 3
 
 image:
   repository: auth-app
-  tag: dev-latest
-  pullPolicy: Always
+  tag: prod-latest
+  pullPolicy: IfNotPresent
 
 service:
   type: ClusterIP
@@ -31,14 +31,14 @@ ingress:
     nginx.ingress.kubernetes.io/gzip: "true"
     nginx.ingress.kubernetes.io/gzip-types: "text/css text/javascript application/javascript application/json"
   hosts:
-    - host: dev.unifyops.io
+    - host: app.unifyops.io
       paths:
         - path: /
           pathType: Prefix
   tls:
-    - secretName: dev-unifyops-tls
+    - secretName: prod-unifyops-tls
       hosts:
-        - dev.unifyops.io
+        - app.unifyops.io
 
 secrets:
   jwtSecret: ""
@@ -48,7 +48,7 @@ secrets:
 config:
   # Common config
   apiPort: "3000"
-  environment: "development"
+  environment: "production"
 
   # App-specific config
   apiUrl: "http://auth-api:8002"
@@ -86,11 +86,11 @@ probes:
 
 resources:
   requests:
-    cpu: 50m
-    memory: 64Mi
+    cpu: 100m
+    memory: 128Mi
   limits:
-    cpu: 200m
-    memory: 256Mi
+    cpu: 500m
+    memory: 512Mi
 
 # Frontend-specific: volumes for nginx
 volumes:

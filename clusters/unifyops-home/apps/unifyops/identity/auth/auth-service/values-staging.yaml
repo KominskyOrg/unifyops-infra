@@ -26,6 +26,9 @@ service:
 
 # Enable ingress for staging testing (optional)
 ingress:
+
+secrets:
+  existingSecret: null
   enabled: true
   className: nginx-private
   hosts:

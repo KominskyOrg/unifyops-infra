@@ -25,6 +25,9 @@ service:
   targetPort: 8002
 
 ingress:
+
+secrets:
+  existingSecret: null
   enabled: true
   className: nginx-private
   hosts:

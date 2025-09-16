@@ -26,6 +26,9 @@ service:
 
 # Production uses path-based routing
 ingress:
+
+secrets:
+  existingSecret: null
   enabled: true
   className: nginx-private
   hosts:
