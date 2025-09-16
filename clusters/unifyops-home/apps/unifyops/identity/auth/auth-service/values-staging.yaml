@@ -153,11 +153,13 @@ secrets:
 postgresql:
   enabled: true
   global:
-    imageRegistry: docker.io  # Override to use Docker Hub instead of Harbor
+    imageRegistry: ""  # Empty string to prevent inheriting Harbor registry
   image:
     registry: docker.io
     repository: bitnami/postgresql
     tag: 15.4.0-debian-11-r45
+    pullPolicy: IfNotPresent
+  imagePullSecrets: []  # Don't use Harbor pull secrets
   auth:
     postgresPassword: "postgres"
     username: "postgres"
