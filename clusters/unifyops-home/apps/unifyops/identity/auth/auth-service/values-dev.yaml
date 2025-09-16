@@ -153,11 +153,12 @@ secrets:
 postgresql:
   enabled: true
   global:
-    imageRegistry: ""  # Override the global registry for PostgreSQL
+    imageRegistry: docker.io  # Override to use Docker Hub instead of Harbor
   image:
     registry: docker.io
     repository: bitnami/postgresql
     tag: 15.4.0-debian-11-r45
+    pullPolicy: IfNotPresent
   auth:
     postgresPassword: "postgres"
     username: "postgres"
