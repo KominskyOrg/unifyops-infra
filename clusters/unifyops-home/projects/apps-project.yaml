@@ -6,7 +6,7 @@ metadata:
 spec:
   sourceRepos:
     - 'https://github.com/KominskyOrg/unifyops-infra.git'
-    - 'oci://harbor.unifyops.io'
+    - 'oci://harbor.unifyops.io/library/unifyops-stack'
   destinations:
     - namespace: uo-*
       server: https://kubernetes.default.svc
