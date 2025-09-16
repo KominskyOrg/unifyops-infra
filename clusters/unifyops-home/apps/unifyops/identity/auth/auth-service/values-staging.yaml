@@ -145,8 +145,7 @@ ingress:
 
 # Secrets (used by api/service appTypes)
 secrets:
-  jwtSecret: "your-super-secret-key"
-  existingSecret: ""
+  existingSecret: "auth-jwt-secret"  # Use external secret for JWT
   existingSecretJwtKey: "jwt-secret"
 
 # PostgreSQL subchart (only deployed when appType=service and database.enabled=true)
@@ -161,9 +160,12 @@ postgresql:
     pullPolicy: IfNotPresent
   imagePullSecrets: []  # Don't use Harbor pull secrets
   auth:
-    postgresPassword: "postgres"
+    existingSecret: "auth-postgresql-secret"  # Use external secret for passwords
+    secretKeys:
+      adminPasswordKey: "postgres-password"
+      userPasswordKey: "password"
+      replicationPasswordKey: "replication-password"
     username: "postgres"
-    password: "postgres"
     database: "auth_db"  # Will be overridden by Makefile: $(STACK)_db
   primary:
     persistence:
