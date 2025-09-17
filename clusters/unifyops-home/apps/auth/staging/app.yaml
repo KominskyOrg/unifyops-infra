@@ -7,19 +7,25 @@ image:
 replicaCount: 2
 
 ingress:
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    external-dns.alpha.kubernetes.io/hostname: "staging.unifyops.io"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/gzip: "true"
+    nginx.ingress.kubernetes.io/gzip-types: "text/css text/javascript application/javascript application/json"
   hosts:
-    - host: auth-staging.unifyops.io
+    - host: staging.unifyops.io
       paths:
         - path: /
           pathType: Prefix
   tls:
     - secretName: staging-unifyops-tls
       hosts:
-        - auth-staging.unifyops.io
+        - staging.unifyops.io
 
 config:
-  apiUrl: "https://staging.unifyops.io"
-  authAppUrl: "https://auth-staging.unifyops.io"
+  apiUrl: "https://staging.unifyops.io/api"
+  authAppUrl: "https://staging.unifyops.io"
   appName: "UnifyOps Auth (Staging)"
   environment: "staging"
 

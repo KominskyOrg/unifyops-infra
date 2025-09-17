@@ -5,19 +5,25 @@ image:
   pullPolicy: Always
 
 ingress:
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    external-dns.alpha.kubernetes.io/hostname: "dev.unifyops.io"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/gzip: "true"
+    nginx.ingress.kubernetes.io/gzip-types: "text/css text/javascript application/javascript application/json"
   hosts:
-    - host: auth-dev.unifyops.io
+    - host: dev.unifyops.io
       paths:
         - path: /
           pathType: Prefix
   tls:
     - secretName: dev-unifyops-tls
       hosts:
-        - auth-dev.unifyops.io
+        - dev.unifyops.io
 
 config:
-  apiUrl: "https://dev.unifyops.io"
-  authAppUrl: "https://auth-dev.unifyops.io"
+  apiUrl: "https://dev.unifyops.io/api"
+  authAppUrl: "https://dev.unifyops.io"
   appName: "UnifyOps Auth (Dev)"
   environment: "development"
 
