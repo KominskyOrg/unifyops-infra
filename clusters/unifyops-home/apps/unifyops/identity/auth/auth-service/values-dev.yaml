@@ -56,7 +56,8 @@ config:
 # Database configuration (only used when appType=service)
 database:
   enabled: true  # Can disable if service doesn't need DB
-  url: "postgresql://postgres:postgres@{{ .Values.stack.name }}-service-postgresql:5432/{{ .Values.stack.name }}_db"
+  # URL will use DB_PASSWORD from secret at runtime
+  url: "postgresql://postgres:${DB_PASSWORD}@{{ .Values.stack.name }}-service-postgresql:5432/{{ .Values.stack.name }}_db"
   external:
     enabled: false
     # host: "external-db.example.com"
@@ -117,7 +118,12 @@ observability:
     instrumentation.opentelemetry.io/otel-python-platform: "glibc"
 
 # Additional environment variables
-env: []
+env:
+  - name: DB_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: auth-postgresql-secret
+        key: postgres-password
 # - name: CUSTOM_FEATURE_FLAG
 #   value: "enabled"
 # - name: EXTERNAL_API_KEY
@@ -151,14 +157,11 @@ secrets:
 # PostgreSQL subchart (only deployed when appType=service and database.enabled=true)
 postgresql:
   enabled: true
-  global:
-    imageRegistry: ""  # Empty string to prevent inheriting Harbor registry
+  # Image will use global Harbor registry - run mirror-bitnami-images.sh to populate Harbor
   image:
-    registry: docker.io
     repository: bitnami/postgresql
     tag: 15.4.0-debian-11-r45
     pullPolicy: IfNotPresent
-  imagePullSecrets: []  # Don't use Harbor pull secrets
   auth:
     existingSecret: "auth-postgresql-secret"  # Use external secret for passwords
     secretKeys:
