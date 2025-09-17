@@ -132,6 +132,9 @@ ingress:
   enabled: true
   className: "nginx-private"
   annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    external-dns.alpha.kubernetes.io/hostname: "staging.unifyops.io"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/gzip: "true"
     nginx.ingress.kubernetes.io/gzip-types: "text/css text/javascript application/javascript application/json"
   hosts:
