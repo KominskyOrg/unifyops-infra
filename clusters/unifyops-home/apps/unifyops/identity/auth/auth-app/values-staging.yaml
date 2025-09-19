@@ -151,6 +151,7 @@ ingress:
 # Network policies
 networkPolicy:
   enabled: true
+  ingressNamespace: nginx-private  # Use nginx-private namespace for ingress controller
   defaultDeny:
     ingress: false  # App needs to accept external traffic
     egress: false   # App needs to call API
