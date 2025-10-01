@@ -38,7 +38,7 @@ config:
   environment: "development"
   
   # App-specific config
-  apiUrl: "http://auth-api:8002"
+  apiUrl: "https://dev.unifyops.io/api/auth"
   
   # Additional frontend config
   appTitle: "Auth Management"
