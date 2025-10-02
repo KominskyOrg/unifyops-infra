@@ -4,248 +4,476 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository Overview
 
-This is the UnifyOps infrastructure repository containing both Terraform configurations for AWS infrastructure and Kubernetes GitOps configurations for on-premises deployments. The repository has evolved to support a hybrid approach with cloud infrastructure via Terraform and local Kubernetes cluster management via ArgoCD.
+This is the UnifyOps infrastructure repository for Kubernetes GitOps deployments using ArgoCD. It manages a k3s home cluster with branch-based environments (dev/staging/prod) and comprehensive infrastructure services including Harbor registry, cert-manager, Longhorn storage, observability stack, and application deployments.
 
 ## Key Commands
 
-### Terraform Infrastructure Management
+### Cluster Bootstrap
 
-All Terraform operations use the Makefile in the root directory. The common workflow is:
+Initial cluster setup (one-time operation):
 
 ```bash
-# Initialize Terraform with backend configuration
-make init
+# Bootstrap ArgoCD
+cd bootstrap
+./bootstrap.sh
 
-# Format Terraform files
-make fmt
+# Apply root app-of-apps
+kubectl apply -f clusters/unifyops-home/apps/root-apps.yaml
 
-# Validate Terraform configuration
-make validate
-
-# Plan changes (creates plan.tfplan file)
-make plan
-
-# Apply planned changes
-make apply
-
-# List current resources
-make list
-
-# Destroy infrastructure (use with caution)
-make destroy
+# Verify ArgoCD installation
+kubectl get pods -n argocd
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d
 ```
 
-### Environment Variables
-
-The Makefile supports environment-specific deployments through variables:
+### GitOps Deployment Workflow
 
 ```bash
-# Deploy to different environments
-make plan INFRA_ENV=dev    # default
-make plan INFRA_ENV=staging
-make plan INFRA_ENV=prod
+# Development deployment
+git checkout dev
+# Make changes
+git commit -am "Your changes"
+git push origin dev  # Auto-syncs to uo-dev namespace
 
-# Override AWS profile
-make plan AWS_PROFILE=dev
+# Staging promotion
+git checkout staging
+git merge dev
+git push origin staging  # Auto-syncs to uo-staging namespace
 
-# Pass additional Terraform variables
-make plan ARGS="-var='ecr_repository_url=<ECR_REPO_URL>'"
+# Production deployment
+git checkout main
+git merge staging
+git push origin main
+argocd app sync unifyops-prod  # Manual sync required
+
+# Check application status
+kubectl get applications -n argocd
+argocd app list
+argocd app get <app-name>
+```
+
+### Secret Management
+
+```bash
+# Create database secrets for all environments
+./scripts/create-db-secrets.sh
+
+# Create JWT secrets for all environments
+./scripts/create-jwt-secrets.sh
+
+# Verify secrets exist
+kubectl get secrets -n uo-dev
+kubectl get secrets -n uo-staging
+kubectl get secrets -n uo-prod
+
+# Rotate a secret
+kubectl create secret generic auth-postgresql-secret \
+  --namespace=uo-dev \
+  --from-literal=postgres-password='<new-password>' \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl rollout restart deployment/auth-service -n uo-dev
+```
+
+### Harbor Registry Operations
+
+```bash
+# Login to Harbor
+docker login harbor.unifyops.io
+
+# Tag and push images
+docker tag myapp:latest harbor.unifyops.io/library/myapp:latest
+docker push harbor.unifyops.io/library/myapp:latest
+
+# Mirror Bitnami images (for airgap deployments)
+./scripts/mirror-bitnami-images.sh
+./scripts/mirror-postgresql-amd64.sh
+```
+
+### Monitoring and Troubleshooting
+
+```bash
+# View application logs
+kubectl logs -n uo-dev deployment/auth-service
+kubectl logs -n uo-dev deployment/auth-api -f
+
+# Check ArgoCD sync status
+argocd app sync-status auth-service-dev
+
+# Force sync an application
+argocd app sync auth-service-dev --prune
+
+# View ArgoCD events
+kubectl get events -n argocd --sort-by='.lastTimestamp'
+
+# Check Longhorn storage
+kubectl get nodes.longhorn.io -n longhorn-system
+kubectl get volumes -n longhorn-system
+
+# Access UIs (requires DNS/hosts configuration)
+# ArgoCD: https://argocd.unifyops.io
+# Harbor: https://harbor.unifyops.io
+# Grafana: https://grafana.unifyops.io
+# Longhorn: https://longhorn.unifyops.io
 ```
 
 ## Architecture
 
 ### Repository Structure
 
-The repository is organized into distinct functional areas:
-
-- **tf/**: Terraform configurations for AWS infrastructure
-  - Contains modular components (ECS, RDS, VPC via external modules)
-  - Uses S3 backend for state management with DynamoDB locking
-  - Supports multi-environment deployments (dev/staging/prod)
-
-- **clusters/**: Cluster-specific GitOps configurations
-  - `unifyops-home/bootstrap/`: Root app-of-apps pattern for ArgoCD
-  - `unifyops-home/apps/`: ArgoCD Application definitions for each environment
-
-- **envs/**: Environment-specific Kubernetes resources
-  - `app/`: Consolidated application configurations for all environments
-    - Base Kustomization shared across branches
-    - `overlays/dev|staging|prod`: Per-environment namespace transformations
-  - `infra/`: Infrastructure components (separate from app deployments)
-  - Uses branch-based environment separation (dev/staging/main branches)
-
-- **apps/**: Reusable Kubernetes application bases
-  - `argocd/`: ArgoCD ingress and TLS configuration
-  - `cert-manager/`: TLS certificate management
-  - `docker-registry/`: Private container registry with basic auth
-  - `longhorn/`: Persistent storage system configuration
-  - `metrics-server/`: Cluster metrics collection
-  - Applications use Kustomize for configuration management
-
-- **projects/**: ArgoCD AppProject definitions for RBAC and resource isolation
-  - `app.yaml`: Unified project for application deployments across environments
-  - `infra.yaml`: Infrastructure components project
-  - Controls which repositories and namespaces each project can access
-
-- **argocd/**: ArgoCD repository configurations
-  - Repository secrets for Git and Helm chart access
+```
+unifyops-infra/
+├── bootstrap/                    # Initial cluster setup
+│   ├── bootstrap.sh              # ArgoCD installation script
+│   └── README.md                 # Bootstrap instructions
+│
+├── clusters/                     # Cluster configurations
+│   └── unifyops-home/
+│       ├── apps/                 # ArgoCD Application definitions
+│       │   ├── root-apps.yaml    # App-of-apps pattern root
+│       │   ├── appset-unifyops.yaml  # ApplicationSet for multi-env deployment
+│       │   ├── argocd/           # ArgoCD UI/ingress config
+│       │   ├── auth/             # Auth stack applications
+│       │   ├── cert-manager/     # TLS certificate management
+│       │   ├── external-dns/     # Automatic DNS management
+│       │   ├── github-runner/    # Self-hosted GitHub Actions runners
+│       │   ├── harbor/           # Container & Helm registry
+│       │   ├── longhorn/         # Distributed block storage
+│       │   ├── metallb/          # Load balancer for bare metal
+│       │   ├── metrics-server/   # Resource metrics
+│       │   ├── nginx-private/    # Private ingress controller
+│       │   ├── observability/    # Prometheus, Grafana, Loki, Tempo
+│       │   ├── sealed-secret/    # Encrypted secrets in Git
+│       │   ├── tailscale/        # VPN mesh networking
+│       │   ├── trilium/          # Note-taking app
+│       │   └── unifyops/         # UnifyOps application deployments
+│       ├── namespaces/           # Namespace definitions with policies
+│       │   ├── uo-dev/           # Dev namespace + network policies
+│       │   ├── uo-staging/       # Staging namespace + network policies
+│       │   ├── uo-prod/          # Prod namespace + network policies
+│       │   └── uo-infra/         # Infrastructure namespace
+│       └── projects/             # ArgoCD project RBAC
+│           ├── apps-project.yaml # Application project
+│           ├── infra-project.yaml # Infrastructure project
+│           └── homelab-project.yaml # Homelab apps
+│
+├── apps/                         # Reusable application bases (Kustomize)
+│   ├── argocd/
+│   ├── cert-manager/
+│   └── longhorn/
+│
+├── argocd/                       # Repository secrets
+│   ├── harbor-helm-repo-sealed.yaml
+│   └── repo-secrets.yaml
+│
+├── scripts/                      # Utility scripts
+│   ├── create-db-secrets.sh      # PostgreSQL secret creation
+│   ├── create-jwt-secrets.sh     # JWT secret creation
+│   └── mirror-*.sh               # Image mirroring for airgap
+│
+└── docs/                         # Documentation
+    ├── GITOPS-WORKFLOW.md        # Complete GitOps workflow
+    ├── INGRESS-ROUTING.md        # Ingress routing patterns
+    └── SECRET-MANAGEMENT.md      # Secret handling guide
+```
 
 ### Infrastructure Components
 
-#### AWS Infrastructure (Terraform)
-1. **VPC and Networking**: Module-based VPC with public/private subnets across multiple AZs
-2. **ECS Cluster**: Supports both EC2 and Fargate launch types for containerized workloads
-3. **RDS Database**: PostgreSQL instances with environment-specific configurations
-4. **Security Groups**: Layered security with least-privilege access patterns
+The cluster runs the following infrastructure services:
 
-#### Kubernetes Infrastructure (GitOps)
-1. **ArgoCD**: GitOps continuous deployment using app-of-apps pattern
-2. **Cert-Manager**: Automated TLS certificate management with self-signed CA
-3. **Docker Registry**: Private container registry with htpasswd authentication (100Gi storage)
-4. **Longhorn**: Distributed block storage for persistent volumes
-5. **Traefik**: Ingress controller for HTTP/HTTPS routing
+1. **ArgoCD**: GitOps continuous deployment with app-of-apps pattern
+   - Root application: `clusters/unifyops-home/apps/root-apps.yaml`
+   - Manages all cluster applications declaratively
+   - Branch-based environment deployment
+
+2. **Harbor**: Container and Helm chart registry
+   - URL: https://harbor.unifyops.io
+   - Includes ChartMuseum for Helm charts
+   - Longhorn-backed persistent storage
+
+3. **Cert-Manager**: Automated TLS certificate management
+   - Let's Encrypt integration for production certs
+   - Route53 DNS-01 challenge solver
+   - Automated certificate renewal
+
+4. **External-DNS**: Automatic DNS record management
+   - Route53 integration
+   - Syncs ingress hostnames to DNS automatically
+
+5. **Longhorn**: Distributed block storage system
+   - NVMe-backed storage at `/var/lib/longhorn`
+   - 3.6TB capacity
+   - Web UI: https://longhorn.unifyops.io
+
+6. **MetalLB**: Load balancer for bare metal
+   - L2 advertisement mode
+   - IP address pool for LoadBalancer services
+
+7. **NGINX Ingress Controller (Private)**
+   - Internal ingress for private services
+   - TLS termination
+   - Path-based routing
+
+8. **Observability Stack**
+   - **Prometheus**: Metrics collection and alerting
+   - **Grafana**: Visualization and dashboards (https://grafana.unifyops.io)
+   - **Loki**: Log aggregation
+   - **Tempo**: Distributed tracing
+   - **Alloy**: Observability data collection agent
+
+9. **Sealed Secrets**: Encrypted secrets in Git
+   - Allows GitOps for secret management
+   - Secrets encrypted with cluster-specific key
+
+10. **Metrics Server**: Resource metrics for HPA and kubectl top
+
+11. **Tailscale**: VPN mesh networking for secure cluster access
+
+12. **GitHub Actions Runners**: Self-hosted runners in cluster
 
 ### Key Design Decisions
 
-- **GitOps Pattern**: ArgoCD manages all Kubernetes deployments from Git
-- **Branch-Based Environments**: Each Git branch (dev/staging/main) deploys to its respective environment
-- **App-of-Apps**: Root application in `clusters/unifyops-home/bootstrap/root-app.yaml` manages all other apps
-- **Namespace Isolation**: Each environment runs in its own namespace with RBAC controls
-- **Storage Architecture**: Dedicated NVMe storage for Kubernetes persistent volumes via Longhorn
-- **Consolidated Configuration**: Single `envs/app/` directory with Kustomize overlays per environment
+1. **GitOps Pattern**: All cluster state managed via Git
+   - ArgoCD continuously syncs cluster state with Git repository
+   - Root app-of-apps pattern in `clusters/unifyops-home/apps/root-apps.yaml`
+   - No manual kubectl applies for managed resources
 
-## Working with Terraform Modules
+2. **Branch-Based Environments**: Git branches map to environments
+   - `dev` branch → `uo-dev` namespace (auto-sync enabled)
+   - `staging` branch → `uo-staging` namespace (auto-sync enabled)
+   - `main` branch → `uo-prod` namespace (manual sync required)
 
-When modifying or adding Terraform resources:
+3. **ApplicationSet Pattern**: Multi-environment deployments
+   - Single ApplicationSet generates apps for all environments
+   - Environment-specific values in overlays
+   - Reduces configuration duplication
 
-1. Modules are located in `tf/modules/`
-2. Each module has its own variables.tf, outputs.tf, and resource files
-3. The main configuration in `tf/main.tf` consumes these modules
-4. Always run `make fmt` before committing Terraform changes
-5. Use `make validate` to check syntax before planning
+4. **Namespace Isolation**: Each environment has dedicated namespace
+   - Network policies enforce isolation
+   - Resource quotas and limit ranges
+   - Separate secrets per environment
 
-## Environment-Specific Configurations
+5. **Storage Architecture**: Longhorn for persistent volumes
+   - Dedicated 3.6TB NVMe storage at `/var/lib/longhorn`
+   - Replicated volumes for high availability
+   - Snapshot and backup capabilities
 
-The infrastructure supports three environments with isolated resources:
+6. **Security Practices**
+   - Sealed Secrets for GitOps-friendly secret management
+   - Network policies restrict inter-pod communication
+   - TLS everywhere via cert-manager
+   - Harbor for trusted container images
 
-- **dev**: Development environment with minimal resources
-- **staging**: Pre-production environment for testing
-- **prod**: Production environment with enhanced redundancy
+7. **Ingress Strategy**: Path-based and subdomain routing
+   - APIs: `/{app-type}/{stack-name}` (e.g., `/api/auth`)
+   - Frontend apps: `{stack}.{env}.unifyops.io`
+   - See INGRESS-ROUTING.md for details
 
-VPC CIDR blocks are pre-allocated per environment:
-- dev: 10.0.0.0/16
-- staging: 10.1.0.0/16  
-- prod: 10.2.0.0/16
+## ArgoCD Project Structure
 
-## Migration Context
+Projects define RBAC and resource boundaries:
 
-The repository supports migration from EC2 to ECS containers. Two deployment options are available:
-- ECS with EC2 launch type (Free Tier eligible)
-- ECS with Fargate (pay-as-you-go, serverless)
+### `apps` Project
+- **Purpose**: UnifyOps application deployments
+- **Namespaces**: `uo-dev`, `uo-staging`, `uo-prod`
+- **Source Repos**:
+  - https://github.com/KominskyOrg/unifyops-infra.git
+  - oci://harbor.unifyops.io/library/unifyops-stack
+- **Auto-sync**: Enabled for dev/staging, manual for prod
 
-See ECS_MIGRATION.md for detailed migration steps and cost comparisons.
+### `infra` Project
+- **Purpose**: Infrastructure components
+- **Namespaces**: All namespaces (including cert-manager, longhorn-system, etc.)
+- **Source Repos**: Multiple Helm repositories (see clusters/unifyops-home/projects/infra-project.yaml:9)
+- **Auto-sync**: Enabled for all components
 
-## Kubernetes/GitOps Operations
+### `homelab` Project
+- **Purpose**: Personal/homelab applications (trilium, etc.)
+- **Namespaces**: Homelab-specific namespaces
+- **Auto-sync**: Enabled
 
-### Branch-Based Deployment Workflow
+## Common Workflows
 
-The cluster uses a branch-based GitOps pattern:
+### Adding a New Application
 
-- **dev branch** → auto-deploys to dev namespace
-- **staging branch** → auto-deploys to staging namespace
-- **main branch** → requires manual sync to prod namespace
+1. **Create Application definition** in appropriate directory:
+   ```bash
+   # For infrastructure component
+   clusters/unifyops-home/apps/myapp/app.yaml
 
-### Deploying to Kubernetes
+   # For UnifyOps stack application
+   clusters/unifyops-home/apps/auth/  # Example structure
+   ```
+
+2. **Define ArgoCD Application**:
+   ```yaml
+   apiVersion: argoproj.io/v1alpha1
+   kind: Application
+   metadata:
+     name: myapp
+     namespace: argocd
+   spec:
+     project: infra  # or 'apps' for UnifyOps applications
+     source:
+       repoURL: https://charts.example.com
+       chart: myapp
+       targetRevision: "1.0.0"
+     destination:
+       server: https://kubernetes.default.svc
+       namespace: myapp-namespace
+     syncPolicy:
+       automated:
+         prune: true
+         selfHeal: true
+   ```
+
+3. **Apply via root app** (automatically synced):
+   ```bash
+   git add clusters/unifyops-home/apps/myapp/
+   git commit -m "Add myapp application"
+   git push origin main
+   # ArgoCD will detect and deploy automatically
+   ```
+
+### Deploying UnifyOps Applications
+
+UnifyOps applications use the ApplicationSet pattern:
+
+1. **Update application code** in `unifyops` repository
+2. **Build and push images** to Harbor:
+   ```bash
+   # Images should be tagged as: harbor.unifyops.io/library/{app-name}:{tag}
+   docker build -t harbor.unifyops.io/library/auth-service:dev-latest .
+   docker push harbor.unifyops.io/library/auth-service:dev-latest
+   ```
+
+3. **Deploy to environment** via branch push:
+   ```bash
+   # For dev
+   git checkout dev
+   git push origin dev  # Auto-deploys to uo-dev
+
+   # For staging
+   git checkout staging
+   git merge dev
+   git push origin staging  # Auto-deploys to uo-staging
+
+   # For production
+   git checkout main
+   git merge staging
+   git push origin main
+   argocd app sync unifyops-prod  # Manual sync
+   ```
+
+### Managing Secrets
+
+**CRITICAL**: Never commit secrets to Git. Use the provided scripts:
 
 ```bash
-# Development deployment
-git checkout dev
-git push origin dev  # Auto-syncs to dev environment
+# Initial setup - creates secrets in all namespaces
+./scripts/create-db-secrets.sh    # PostgreSQL passwords
+./scripts/create-jwt-secrets.sh   # JWT signing keys
 
-# Staging promotion
-git checkout staging
-git merge dev
-git push origin staging  # Auto-syncs to staging
+# Verify secrets
+kubectl get secrets -n uo-dev | grep -E "(postgresql|jwt)"
 
-# Production deployment
-git checkout main
-git merge staging
-git push origin main
-argocd app sync app-prod  # Manual sync required
+# For new secrets, use Sealed Secrets:
+kubectl create secret generic my-secret \
+  --from-literal=key=value \
+  --dry-run=client -o yaml > secret.yaml
 
-# Check application status
-kubectl get applications -n argocd
+kubeseal --controller-name=sealed-secrets \
+  --controller-namespace=sealed-secrets \
+  < secret.yaml > sealed-secret.yaml
+
+rm secret.yaml  # IMPORTANT: Delete plaintext
+kubectl apply -f sealed-secret.yaml
 ```
 
-### Managing ArgoCD Applications
+See SECRET-MANAGEMENT.md for complete details.
+
+### Troubleshooting Application Sync Issues
 
 ```bash
-# Access ArgoCD UI
-# URL: http://argocd.local (requires /etc/hosts entry)
+# Check application health
+argocd app get myapp
+kubectl get application myapp -n argocd -o yaml
 
-# Get admin password
-kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+# View sync errors
+argocd app sync myapp --dry-run
 
-# CLI operations (requires argocd CLI)
-argocd app list
-argocd app sync <app-name>
-argocd app get <app-name>
+# Force hard refresh
+argocd app sync myapp --force --prune
+
+# Check ArgoCD controller logs
+kubectl logs -n argocd deployment/argocd-application-controller -f
+
+# View resource events
+kubectl get events -n target-namespace --sort-by='.lastTimestamp'
 ```
 
-### Storage Management
-
-Longhorn provides persistent storage:
+### Working with Helm Charts in Harbor
 
 ```bash
-# Access Longhorn UI
-# URL: http://longhorn.local (requires /etc/hosts entry)
+# Package a Helm chart
+helm package ./my-chart
 
-# Fix storage issues
-./scripts/fix-longhorn-storage.sh
+# Login to Harbor registry
+helm registry login harbor.unifyops.io
 
-# Check storage status
-kubectl get nodes.longhorn.io -n longhorn-system
-```
+# Push chart to Harbor
+helm push my-chart-1.0.0.tgz oci://harbor.unifyops.io/library
 
-### Container Registry
-
-Docker Registry provides private image storage:
-
-```bash
-# Access registry
-# URL: https://registry.local
-# Auth: admin / changeme123 (update in production)
-
-# Login to registry
-docker login registry.local
-
-# Push images
-docker tag myapp:latest registry.local/myapp:latest
-docker push registry.local/myapp:latest
+# Use in ArgoCD Application
+# source:
+#   repoURL: oci://harbor.unifyops.io/library
+#   chart: my-chart
+#   targetRevision: "1.0.0"
 ```
 
 ## Critical Files and Configurations
 
-### Terraform Files
-- `tf/secrets.tfvars`: Contains sensitive variables (not in version control)
-- `tf/plan.tfplan`: Terraform plan output file (generated, not committed)
-- `Makefile`: Primary interface for all Terraform operations
+### ArgoCD Core Files
+- `clusters/unifyops-home/apps/root-apps.yaml`: Root app-of-apps application
+  - Manages all applications in `clusters/unifyops-home/apps/`
+  - Automatically syncs new applications
+  - Located in `infra` project
 
-### Kubernetes/GitOps Files
-- `clusters/unifyops-home/bootstrap/root-app.yaml`: Root ArgoCD application (app-of-apps)
-- `clusters/unifyops-home/apps/*.yaml`: Environment-specific ArgoCD applications
-  - `dev.yaml`: Tracks dev branch → dev namespace
-  - `staging.yaml`: Tracks staging branch → staging namespace
-  - `prod.yaml`: Tracks main branch → prod namespace (manual sync)
-- `envs/app/`: Consolidated application configurations
-  - `overlays/dev|staging|prod/`: Environment-specific Kustomize overlays
-- `apps/docker-registry/`: Private container registry configuration
-- `apps/longhorn/values.yaml`: Longhorn storage configuration (update path for NVMe mount)
-- `projects/app.yaml`: Unified ArgoCD project for applications
-- `GITOPS-WORKFLOW.md`: Complete GitOps workflow documentation
+- `clusters/unifyops-home/apps/appset-unifyops.yaml`: Multi-environment ApplicationSet
+  - Generates applications for dev/staging/prod
+  - Maps branches to namespaces
+  - Uses overlay pattern for environment-specific config
 
-### Server Configuration
-- **Cluster Location**: SSH accessible at `ssh unifyops`
-- **Node Name**: um790
-- **Storage**: 3.6TB NVMe mounted at `/var/lib/longhorn`
-- **Ingress Domains**: *.local domains pointing to cluster IP
+### Project Definitions
+- `clusters/unifyops-home/projects/apps-project.yaml`: Application RBAC
+- `clusters/unifyops-home/projects/infra-project.yaml`: Infrastructure RBAC
+- `clusters/unifyops-home/projects/homelab-project.yaml`: Homelab apps RBAC
+
+### Namespace Policies
+- `clusters/unifyops-home/namespaces/uo-{dev,staging,prod}/`
+  - `namespace.yaml`: Namespace definition
+  - `networkpolicies.yaml`: Pod-to-pod communication rules
+  - `limitranges.yaml`: Default resource limits
+  - `resourcequotas.yaml`: Namespace resource caps
+
+### Infrastructure Applications
+- `clusters/unifyops-home/apps/harbor/app.yaml`: Container registry config
+- `clusters/unifyops-home/apps/cert-manager/`: TLS certificate management
+- `clusters/unifyops-home/apps/longhorn/`: Persistent storage
+- `clusters/unifyops-home/apps/observability/`: Prometheus/Grafana stack
+
+### Sealed Secrets
+- `clusters/unifyops-home/apps/*/secrets/*.sealed.yaml`: Encrypted secrets
+- `argocd/harbor-helm-repo-sealed.yaml`: Harbor Helm repository credentials
+- Requires cluster-specific sealing key (never commit unsealed secrets)
+
+### Documentation
+- `GITOPS-WORKFLOW.md`: Complete GitOps deployment workflow
+- `INGRESS-ROUTING.md`: URL routing patterns and ingress strategy
+- `SECRET-MANAGEMENT.md`: Secret handling and rotation procedures
+- `bootstrap/README.md`: Initial cluster setup instructions
+
+### Cluster Information
+- **Node**: um790 (single-node k3s cluster)
+- **SSH Access**: `ssh unifyops`
+- **Storage**: 3.6TB NVMe at `/var/lib/longhorn`
+- **Domain**: unifyops.io (Route53 managed)
+- **Load Balancer**: MetalLB with L2 advertisement
