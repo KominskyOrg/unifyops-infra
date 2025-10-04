@@ -1,81 +1,147 @@
-# Auth API Gateway - Production Environment Values
-# These values override the base Helm chart for production environment
+# API Gateway Deployment Values for API
+# Uses the simplified appType-driven approach
+# Usage: helm install {{ .Values.stack.name }}-api uo-infra-helm/ -f deployment-values.yaml
 
+# Global configuration
 global:
-  namespace: uo-prod
-  imageRegistry: harbor.unifyops.io/library
+  namespace: "uo-prod"
+  imageRegistry: "harbor.unifyops.io/library"
   imagePullSecrets:
     - name: harbor-registry
 
+# Stack configuration - Drives everything
 stack:
   name: auth
   appType: api
 
+# Main deployment configuration
 enabled: true
-replicaCount: 3
+replicaCount: 1
 
+# Image configuration
 image:
-  repository: auth-api
-  tag: prod-latest
+  repository: "auth-api"  # auth-api
+  tag: "prod-latest"  # Override: --set image.tag=v1.0.0
   pullPolicy: IfNotPresent
 
+# Service configuration
 service:
   type: ClusterIP
-  port: 8002
+  port: 8002      # api port
   targetPort: 8002
+  annotations: {}
 
-# Production uses path-based routing
-ingress:
-
-secrets:
-  existingSecret: null
-  enabled: true
-  className: nginx-private
-  hosts:
-    - host: api.unifyops.io
-      paths:
-        - path: /api/auth
-          pathType: Prefix
-  tls:
-    - secretName: api-unifyops-tls
-      hosts:
-        - api.unifyops.io
-
+# Configuration for API Gateway
 config:
   # Common config
   apiPort: "8002"
   environment: "production"
-  logLevel: "WARNING"
   
-  # API Gateway config
-  serviceUrl: "http://auth-service:8001"
+  # API-specific config
+  serviceUrl: "http://auth-service:8001"  # Backend service URL
   
-  # Rate limiting
-  rateLimitPerMinute: "200"
-  corsAllowedOrigins: "https://auth.unifyops.io"
-  
-  # Auth verification endpoint (for other services)
-  authApiUrl: "http://auth-api:8002"
-  authApiPrefix: "/api/auth"
+  # Additional API Gateway config
+  rateLimitPerMinute: "100"
+  corsAllowedOrigins: "*"
+  # Add custom config as needed
 
+# Resources for API Gateway (typically needs more than service)
 resources:
   requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
     cpu: 500m
     memory: 512Mi
-  limits:
-    cpu: 2000m
-    memory: 2Gi
 
-# Production autoscaling
+# Health checks
+probes:
+  readiness:
+    enabled: true
+    httpGet:
+      path: "/api/auth/health"
+      port: 8002
+    initialDelaySeconds: 10
+    periodSeconds: 10
+  liveness:
+    enabled: true
+    httpGet:
+      path: "/api/auth/health"
+      port: 8002
+    initialDelaySeconds: 30
+    periodSeconds: 20
+
+# Autoscaling - Often enabled for API Gateways
 autoscaling:
   enabled: true
-  minReplicas: 3
+  minReplicas: 2
   maxReplicas: 10
   targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# Additional environment variables
+env:
+  - name: LOG_LEVEL
+    value: "INFO"
+  - name: ENABLE_METRICS
+    value: "true"
+
+# Placement
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Ingress - Automatically enabled for API appType
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+  hosts:
+    - host: prod.unifyops.io
+      paths:
+        - path: /api/auth
+          pathType: Prefix
+  tls: []
+
+# Secrets - Needed for API Gateway (JWT, etc)
+secrets:
+  jwtSecret: "prod-jwt-secret-key"
+  existingSecret: ""
+  existingSecretJwtKey: "jwt-secret"
 
 # Network policies
 networkPolicy:
   enabled: true
   defaultDeny:
-    ingress: false
-    egress: false
+    ingress: true  # API needs to accept external traffic
+    egress: true
+
+# ServiceAccount
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# Pod Security contexts
+podSecurityContext:
+  fsGroup: 1000
+  runAsNonRoot: true
+  runAsUser: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# Note: PostgreSQL subchart is NOT included for API Gateway
+# API Gateways don't need databases 
+postgresql:
+  enabled: false 
+database:
+  waitForReady: false
+  readinessTimeout: 0
