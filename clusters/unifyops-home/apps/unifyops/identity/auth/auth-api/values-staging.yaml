@@ -4,7 +4,7 @@
 
 # Global configuration
 global:
-  namespace: "uo-dev"
+  namespace: "uo-staging"
   imageRegistry: "harbor.unifyops.io/library"
   imagePullSecrets:
     - name: harbor-registry
