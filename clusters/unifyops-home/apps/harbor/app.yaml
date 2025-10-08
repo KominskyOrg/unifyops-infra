@@ -39,12 +39,16 @@ spec:
           persistentVolumeClaim:
             registry:
               storageClass: longhorn
+              size: 100Gi
             database:
               storageClass: longhorn
+              size: 5Gi
             redis:
               storageClass: longhorn
+              size: 2Gi
             jobservice:
               storageClass: longhorn
+              size: 5Gi
             trivy:
               storageClass: longhorn
   destination:
