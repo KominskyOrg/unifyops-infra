@@ -12,6 +12,7 @@ spec:
     helm:
       values: |
         externalURL: https://harbor.unifyops.io
+        harborAdminPassword: "Y7gRUdjSi1W42maVxlTuKw=="
         expose:
           type: ingress
           tls:
