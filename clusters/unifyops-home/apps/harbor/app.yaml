@@ -42,16 +42,13 @@ spec:
               size: 100Gi
             database:
               storageClass: longhorn
-              size: 10Gi
             redis:
               storageClass: longhorn
-              size: 5Gi
             jobservice:
               storageClass: longhorn
               size: 10Gi
             trivy:
               storageClass: longhorn
-              size: 10Gi
   destination:
     server: https://kubernetes.default.svc
     namespace: harbor-system
