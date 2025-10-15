@@ -12,13 +12,13 @@ spec:
     helm:
       values: |
         defaultSettings:
-          defaultReplicaCount: 1
+          defaultReplicaCount: "1"
           createDefaultDiskLabeledNodes: false
           defaultDataPath: /var/lib/longhorn
         persistence:
           defaultClass: true
           defaultFsType: ext4
-          defaultClassReplicaCount: 1
+          defaultClassReplicaCount: "1"
   destination:
     server: https://kubernetes.default.svc
     namespace: longhorn-system
