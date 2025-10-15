@@ -21,8 +21,8 @@ replicaCount: 2
 # Image configuration
 image:
   repository: "auth-app"
-  tag: "staging-latest"  # Override: --set image.tag=v1.0.0
-  pullPolicy: IfNotPresent
+  tag: "staging-latest"  # Auto-updated by CI/CD to commit SHA
+  pullPolicy: IfNotPresent  # SHA tags are immutable
 
 # Service configuration
 service:

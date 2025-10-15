@@ -21,8 +21,8 @@ replicaCount: 1
 # Image configuration
 image:
   repository: "auth-service"
-  tag: "dev-latest"
-  pullPolicy: Always
+  tag: "dd21efa0a477ec0a1f95b5a9c58ea1443fb20a83"  # Updated by CI/CD workflow
+  pullPolicy: IfNotPresent  # SHA tags are immutable, no need to always pull
 
 # Service configuration
 service:

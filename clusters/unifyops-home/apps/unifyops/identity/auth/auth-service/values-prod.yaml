@@ -21,8 +21,8 @@ replicaCount: 3
 # Image configuration
 image:
   repository: "auth-service"
-  tag: "prod-latest"
-  pullPolicy: IfNotPresent
+  tag: "prod-latest"  # Auto-updated by CI/CD to commit SHA
+  pullPolicy: IfNotPresent  # SHA tags are immutable
 
 # Service configuration
 service:

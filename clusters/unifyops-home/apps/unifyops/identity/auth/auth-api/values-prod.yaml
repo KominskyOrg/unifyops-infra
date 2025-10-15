@@ -20,9 +20,9 @@ replicaCount: 1
 
 # Image configuration
 image:
-  repository: "auth-api"  # auth-api
-  tag: "prod-latest"  # Override: --set image.tag=v1.0.0
-  pullPolicy: IfNotPresent
+  repository: "auth-api"
+  tag: "prod-latest"  # Auto-updated by CI/CD to commit SHA
+  pullPolicy: IfNotPresent  # SHA tags are immutable
 
 # Service configuration
 service:
