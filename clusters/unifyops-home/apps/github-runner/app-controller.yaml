@@ -10,8 +10,6 @@ spec:
     repoURL: oci://ghcr.io/actions/actions-runner-controller-charts
     targetRevision: "0.13.0"
     helm:
-      oci: true
-      passCredentials: true
       values: |
         serviceAccount:
           create: true
