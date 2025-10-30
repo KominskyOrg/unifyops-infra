@@ -3,3 +3,4 @@ kind: Kustomization
 resources:
   - app.yaml
   - certificate.yaml
+  - secrets/route53-credentials.sealed.yaml
