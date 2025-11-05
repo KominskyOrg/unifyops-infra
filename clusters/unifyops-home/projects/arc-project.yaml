@@ -6,8 +6,8 @@ metadata:
 spec:
   description: ARC (GitHub Actions Runner Controller) apps
   sourceRepos:
-    - 'oci://ghcr.io/actions/actions-runner-controller-charts'
-    - 'oci://ghcr.io/actions/actions-runner-scale-set-charts'
+    - 'ghcr.io/actions/actions-runner-controller-charts'
+    - 'ghcr.io/actions/actions-runner-scale-set-charts'
   destinations:
     - namespace: arc-systems
       server: https://kubernetes.default.svc
