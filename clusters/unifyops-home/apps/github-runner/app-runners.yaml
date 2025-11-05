@@ -22,34 +22,6 @@ spec:
           name: gha-runner-scale-set-controller
         containerMode:
           type: "dind"
-        template:
-          spec:
-            containers:
-            - name: runner
-              image: ghcr.io/actions/actions-runner:latest
-              command: ["/home/runner/run.sh"]
-              volumeMounts:
-              - name: work
-                mountPath: /home/runner/_work
-              - name: dind-sock
-                mountPath: /var/run
-            - name: dind
-              image: docker:dind
-              env:
-              - name: DOCKER_TLS_CERTDIR
-                value: ""
-              securityContext:
-                privileged: true
-              volumeMounts:
-              - name: work
-                mountPath: /home/runner/_work
-              - name: dind-sock
-                mountPath: /var/run
-            volumes:
-            - name: work
-              emptyDir: {}
-            - name: dind-sock
-              emptyDir: {}
   destination:
     server: https://kubernetes.default.svc
     namespace: github-runners
