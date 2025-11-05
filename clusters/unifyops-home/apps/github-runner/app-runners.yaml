@@ -23,17 +23,16 @@ spec:
         containerMode:
           type: "dind"
 
-        # Temporarily use official image to test if custom image is the issue
-        # Custom runner image from Harbor registry
-        # template:
-        #   spec:
-        #     containers:
-        #     - name: runner
-        #       image: harbor.unifyops.io/library/arc-runner-unifyops:v1.1
-        #       imagePullPolicy: Always
-        #     # Harbor registry credentials
-        #     imagePullSecrets:
-        #     - name: harbor-registry-secret
+        # Custom runner image from Harbor registry (v1.2 - fixed to not override USER)
+        template:
+          spec:
+            containers:
+            - name: runner
+              image: harbor.unifyops.io/library/arc-runner-unifyops:v1.2
+              imagePullPolicy: Always
+            # Harbor registry credentials
+            imagePullSecrets:
+            - name: harbor-registry-secret
   destination:
     server: https://kubernetes.default.svc
     namespace: github-runners
