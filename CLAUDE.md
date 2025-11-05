@@ -134,7 +134,7 @@ unifyops-infra/
 │       │   ├── auth/             # Auth stack applications
 │       │   ├── cert-manager/     # TLS certificate management
 │       │   ├── external-dns/     # Automatic DNS management
-│       │   ├── github-runner/    # Self-hosted GitHub Actions runners
+│       │   ├── github-runner/    # arc-runners GitHub Actions runners
 │       │   ├── harbor/           # Container & Helm registry
 │       │   ├── longhorn/         # Distributed block storage
 │       │   ├── metallb/          # Load balancer for bare metal
@@ -180,39 +180,47 @@ unifyops-infra/
 The cluster runs the following infrastructure services:
 
 1. **ArgoCD**: GitOps continuous deployment with app-of-apps pattern
+
    - Root application: `clusters/unifyops-home/apps/root-apps.yaml`
    - Manages all cluster applications declaratively
    - Branch-based environment deployment
 
 2. **Harbor**: Container and Helm chart registry
+
    - URL: https://harbor.unifyops.io
    - Includes ChartMuseum for Helm charts
    - Longhorn-backed persistent storage
 
 3. **Cert-Manager**: Automated TLS certificate management
+
    - Let's Encrypt integration for production certs
    - Route53 DNS-01 challenge solver
    - Automated certificate renewal
 
 4. **External-DNS**: Automatic DNS record management
+
    - Route53 integration
    - Syncs ingress hostnames to DNS automatically
 
 5. **Longhorn**: Distributed block storage system
+
    - NVMe-backed storage at `/var/lib/longhorn`
    - 3.6TB capacity
    - Web UI: https://longhorn.unifyops.io
 
 6. **MetalLB**: Load balancer for bare metal
+
    - L2 advertisement mode
    - IP address pool for LoadBalancer services
 
 7. **NGINX Ingress Controller (Private)**
+
    - Internal ingress for private services
    - TLS termination
    - Path-based routing
 
 8. **Observability Stack**
+
    - **Prometheus**: Metrics collection and alerting
    - **Grafana**: Visualization and dashboards (https://grafana.unifyops.io)
    - **Loki**: Log aggregation
@@ -220,6 +228,7 @@ The cluster runs the following infrastructure services:
    - **Alloy**: Observability data collection agent
 
 9. **Sealed Secrets**: Encrypted secrets in Git
+
    - Allows GitOps for secret management
    - Secrets encrypted with cluster-specific key
 
@@ -227,36 +236,42 @@ The cluster runs the following infrastructure services:
 
 11. **Tailscale**: VPN mesh networking for secure cluster access
 
-12. **GitHub Actions Runners**: Self-hosted runners in cluster
+12. **GitHub Actions Runners**: arc-runners runners in cluster
 
 ### Key Design Decisions
 
 1. **GitOps Pattern**: All cluster state managed via Git
+
    - ArgoCD continuously syncs cluster state with Git repository
    - Root app-of-apps pattern in `clusters/unifyops-home/apps/root-apps.yaml`
    - No manual kubectl applies for managed resources
 
 2. **Branch-Based Environments**: Git branches map to environments
+
    - `dev` branch → `uo-dev` namespace (auto-sync enabled)
    - `staging` branch → `uo-staging` namespace (auto-sync enabled)
    - `main` branch → `uo-prod` namespace (manual sync required)
 
 3. **ApplicationSet Pattern**: Multi-environment deployments
+
    - Single ApplicationSet generates apps for all environments
    - Environment-specific values in overlays
    - Reduces configuration duplication
 
 4. **Namespace Isolation**: Each environment has dedicated namespace
+
    - Network policies enforce isolation
    - Resource quotas and limit ranges
    - Separate secrets per environment
 
 5. **Storage Architecture**: Longhorn for persistent volumes
+
    - Dedicated 3.6TB NVMe storage at `/var/lib/longhorn`
    - Replicated volumes for high availability
    - Snapshot and backup capabilities
 
 6. **Security Practices**
+
    - Sealed Secrets for GitOps-friendly secret management
    - Network policies restrict inter-pod communication
    - TLS everywhere via cert-manager
@@ -272,6 +287,7 @@ The cluster runs the following infrastructure services:
 Projects define RBAC and resource boundaries:
 
 ### `apps` Project
+
 - **Purpose**: UnifyOps application deployments
 - **Namespaces**: `uo-dev`, `uo-staging`, `uo-prod`
 - **Source Repos**:
@@ -280,12 +296,14 @@ Projects define RBAC and resource boundaries:
 - **Auto-sync**: Enabled for dev/staging, manual for prod
 
 ### `infra` Project
+
 - **Purpose**: Infrastructure components
 - **Namespaces**: All namespaces (including cert-manager, longhorn-system, etc.)
 - **Source Repos**: Multiple Helm repositories (see clusters/unifyops-home/projects/infra-project.yaml:9)
 - **Auto-sync**: Enabled for all components
 
 ### `homelab` Project
+
 - **Purpose**: Personal/homelab applications (trilium, etc.)
 - **Namespaces**: Homelab-specific namespaces
 - **Auto-sync**: Enabled
@@ -295,6 +313,7 @@ Projects define RBAC and resource boundaries:
 ### Adding a New Application
 
 1. **Create Application definition** in appropriate directory:
+
    ```bash
    # For infrastructure component
    clusters/unifyops-home/apps/myapp/app.yaml
@@ -304,6 +323,7 @@ Projects define RBAC and resource boundaries:
    ```
 
 2. **Define ArgoCD Application**:
+
    ```yaml
    apiVersion: argoproj.io/v1alpha1
    kind: Application
@@ -311,7 +331,7 @@ Projects define RBAC and resource boundaries:
      name: myapp
      namespace: argocd
    spec:
-     project: infra  # or 'apps' for UnifyOps applications
+     project: infra # or 'apps' for UnifyOps applications
      source:
        repoURL: https://charts.example.com
        chart: myapp
@@ -339,6 +359,7 @@ UnifyOps applications use the ApplicationSet pattern:
 
 1. **Update application code** in `unifyops` repository
 2. **Build and push images** to Harbor:
+
    ```bash
    # Images should be tagged as: harbor.unifyops.io/library/{app-name}:{tag}
    docker build -t harbor.unifyops.io/library/auth-service:dev-latest .
@@ -346,6 +367,7 @@ UnifyOps applications use the ApplicationSet pattern:
    ```
 
 3. **Deploy to environment** via branch push:
+
    ```bash
    # For dev
    git checkout dev
@@ -432,7 +454,9 @@ helm push my-chart-1.0.0.tgz oci://harbor.unifyops.io/library
 ## Critical Files and Configurations
 
 ### ArgoCD Core Files
+
 - `clusters/unifyops-home/apps/root-apps.yaml`: Root app-of-apps application
+
   - Manages all applications in `clusters/unifyops-home/apps/`
   - Automatically syncs new applications
   - Located in `infra` project
@@ -443,11 +467,13 @@ helm push my-chart-1.0.0.tgz oci://harbor.unifyops.io/library
   - Uses overlay pattern for environment-specific config
 
 ### Project Definitions
+
 - `clusters/unifyops-home/projects/apps-project.yaml`: Application RBAC
 - `clusters/unifyops-home/projects/infra-project.yaml`: Infrastructure RBAC
 - `clusters/unifyops-home/projects/homelab-project.yaml`: Homelab apps RBAC
 
 ### Namespace Policies
+
 - `clusters/unifyops-home/namespaces/uo-{dev,staging,prod}/`
   - `namespace.yaml`: Namespace definition
   - `networkpolicies.yaml`: Pod-to-pod communication rules
@@ -455,23 +481,27 @@ helm push my-chart-1.0.0.tgz oci://harbor.unifyops.io/library
   - `resourcequotas.yaml`: Namespace resource caps
 
 ### Infrastructure Applications
+
 - `clusters/unifyops-home/apps/harbor/app.yaml`: Container registry config
 - `clusters/unifyops-home/apps/cert-manager/`: TLS certificate management
 - `clusters/unifyops-home/apps/longhorn/`: Persistent storage
 - `clusters/unifyops-home/apps/observability/`: Prometheus/Grafana stack
 
 ### Sealed Secrets
+
 - `clusters/unifyops-home/apps/*/secrets/*.sealed.yaml`: Encrypted secrets
 - `argocd/harbor-helm-repo-sealed.yaml`: Harbor Helm repository credentials
 - Requires cluster-specific sealing key (never commit unsealed secrets)
 
 ### Documentation
+
 - `GITOPS-WORKFLOW.md`: Complete GitOps deployment workflow
 - `INGRESS-ROUTING.md`: URL routing patterns and ingress strategy
 - `SECRET-MANAGEMENT.md`: Secret handling and rotation procedures
 - `bootstrap/README.md`: Initial cluster setup instructions
 
 ### Cluster Information
+
 - **Node**: um790 (single-node k3s cluster)
 - **SSH Access**: `ssh unifyops`
 - **Storage**: 3.6TB NVMe at `/var/lib/longhorn`
