@@ -1,0 +1,21 @@
+{
+  "kind": "SealedSecret",
+  "apiVersion": "bitnami.com/v1alpha1",
+  "metadata": {
+    "name": "github-token",
+    "namespace": "github-runners",
+    "creationTimestamp": null
+  },
+  "spec": {
+    "template": {
+      "metadata": {
+        "name": "github-token",
+        "namespace": "github-runners",
+        "creationTimestamp": null
+      }
+    },
+    "encryptedData": {
+      "github_token": "AgB02m3d5KmdPuWQvpLD+z9205tQbeEx4o2wXj0pIfF9T0uWL0d4RerjKFW6cXBeYm2hD6EF2qy0CSUCDyGlYoqbsDHU8u22mMc0yPw10NHUQIUj/w3/twwJfnJRBlKKeeKfCjZnwCnqLL16FslIpFoOYVCmOEsKvROxx3F7y+7I8s/DYglWJAudQ3RKzVOjhzVrjKmefeVs8ibQZQ27X9urSvPs+GYIftFB4jlfVtCzPahjPo+cMpPtvo7aL0tpYwobkb8UkWnjqQXYMfTxx9XXiunHtH8g6zIVLe7WCljx8LE8JpIPdU7Zih2lQQ/ylkYnKZg/neeCo3/6Fs+C5fi7Vmg6+iCY+eVLJ5HToEZxf5GMfZ+xUPQFziEDhLZWXBGpcHRhv4+7aUWn8FEKg7BPMIAyQyWttvZ1VCtYQ+J2mVN9LZBt1aTZof5YYdbrwmVRIPkFrSr4zWJrylnkj4gxsU5i9AkUnpDZVmfxVFSpIA1f4SaM9C/y7CRxxkYbavplQwlSi71Tj2cIVyRWMevCeklE+ehtkLtnbBH1YvpM/OiCC1kvdwEZ7BgYqXG24Udl2kZ1lNrXBp9NiK2D29XpV0eJE9c8ByJMTful0o8arHMs8+TfU932hLv6GcVf+wrpi6xeOnopY/E9avxFjTUQKqpdXgVHyOZi319ifreeV4iZYAzYORXhAbSxmHSE/e/XTIMBwEgS2bL+r1FgOEnhl/25DvZYNh7JHrJy0xb77lSof1f7Vk55"
+    }
+  }
+}
