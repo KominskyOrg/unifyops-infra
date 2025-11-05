@@ -15,7 +15,7 @@ spec:
       values: |
         githubConfigUrl: "https://github.com/KominskyOrg"
         githubConfigSecret: "github-token"
-        minRunners: 0
+        minRunners: 1
         maxRunners: 5
         controllerServiceAccount:
           namespace: arc-systems
