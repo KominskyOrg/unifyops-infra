@@ -3,15 +3,15 @@ kind: Application
 metadata:
   name: arc-runners
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-options: ServerSideApply=true
 spec:
   project: arc
   source:
-    repoURL: oci://ghcr.io/actions/actions-runner-controller-charts
+    repoURL: ghcr.io/actions/actions-runner-controller-charts
     chart: gha-runner-scale-set
     targetRevision: "0.13.0"
     helm:
-      oci: true
-      passCredentials: true
       values: |
         githubConfigUrl: "https://github.com/KominskyOrg"
         githubConfigSecret: "github-token"
@@ -29,3 +29,5 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+      - ServerSideApply=true
+      - RespectIgnoreDifferences=true
