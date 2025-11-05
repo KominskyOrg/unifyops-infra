@@ -10,8 +10,8 @@
 # - Non-root user execution
 # - Multi-stage build pattern for smaller final image
 
-# Build stage for tool installation
-FROM ghcr.io/actions/actions-runner:latest AS builder
+# Base image - official GitHub Actions runner
+FROM ghcr.io/actions/actions-runner:latest
 
 # Define tool versions as build arguments for easy updates
 ARG YQ_VERSION=v4.40.5
@@ -91,12 +91,6 @@ RUN echo "=== Verifying tool installations ===" && \
     echo "kubectl: ${KUBECTL_VERSION}" >> /etc/runner-build-info && \
     echo "helm: ${HELM_VERSION}" >> /etc/runner-build-info
 
-# Switch back to runner user for security (principle of least privilege)
+# Switch back to runner user (base image default)
+# Note: Don't override WORKDIR or ENTRYPOINT - let base image handle runner startup
 USER runner
-
-# Set working directory
-WORKDIR /home/runner
-
-# Health check to ensure runner is responsive
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD pgrep -x "Runner.Listener" > /dev/null || exit 1
