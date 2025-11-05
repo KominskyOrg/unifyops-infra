@@ -7,7 +7,7 @@ spec:
   project: arc
   source:
     chart: gha-runner-scale-set-controller
-    repoURL: oci://ghcr.io/actions/actions-runner-controller-charts
+    repoURL: ghcr.io/actions/actions-runner-controller-charts
     targetRevision: "0.13.0"
     helm:
       values: |
