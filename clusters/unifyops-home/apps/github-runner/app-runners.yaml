@@ -15,11 +15,53 @@ spec:
       values: |
         githubConfigUrl: "https://github.com/KominskyOrg"
         githubConfigSecret: "github-token"
-        minRunners: 1
+        minRunners: 0
         maxRunners: 5
         controllerServiceAccount:
           namespace: arc-systems
           name: gha-runner-scale-set-controller
+        template:
+          spec:
+            containers:
+            - name: runner
+              image: ghcr.io/actions/actions-runner:latest
+              command: ["/home/runner/run.sh"]
+              env:
+              - name: DOCKER_HOST
+                value: tcp://localhost:2376
+              - name: DOCKER_TLS_CERTDIR
+                value: /certs
+              - name: DOCKER_TLS_VERIFY
+                value: "1"
+              - name: DOCKER_CERT_PATH
+                value: /certs/client
+              volumeMounts:
+              - name: work
+                mountPath: /home/runner/_work
+              - name: certs-client
+                mountPath: /certs/client
+                readOnly: true
+            - name: dind
+              image: docker:24-dind
+              securityContext:
+                privileged: true
+              env:
+              - name: DOCKER_TLS_CERTDIR
+                value: /certs
+              volumeMounts:
+              - name: work
+                mountPath: /home/runner/_work
+              - name: certs-client
+                mountPath: /certs/client
+              - name: certs-ca
+                mountPath: /certs/ca
+            volumes:
+            - name: work
+              emptyDir: {}
+            - name: certs-client
+              emptyDir: {}
+            - name: certs-ca
+              emptyDir: {}
   destination:
     server: https://kubernetes.default.svc
     namespace: github-runners
