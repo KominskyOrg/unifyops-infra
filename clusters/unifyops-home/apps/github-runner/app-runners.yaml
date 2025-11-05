@@ -20,8 +20,17 @@ spec:
         controllerServiceAccount:
           namespace: arc-systems
           name: gha-runner-scale-set-controller
+        containerMode:
+          type: "dind"
         template:
           spec:
+            initContainers:
+            - name: init-dind-externals
+              image: ghcr.io/actions/actions-runner:latest
+              command: ["cp", "-r", "-v", "/home/runner/externals/.", "/home/runner/tmpDir/"]
+              volumeMounts:
+              - name: dind-externals
+                mountPath: /home/runner/tmpDir
             containers:
             - name: runner
               image: ghcr.io/actions/actions-runner:latest
@@ -29,8 +38,6 @@ spec:
               env:
               - name: DOCKER_HOST
                 value: tcp://localhost:2376
-              - name: DOCKER_TLS_CERTDIR
-                value: /certs
               - name: DOCKER_TLS_VERIFY
                 value: "1"
               - name: DOCKER_CERT_PATH
@@ -38,29 +45,47 @@ spec:
               volumeMounts:
               - name: work
                 mountPath: /home/runner/_work
-              - name: certs-client
+              - name: dind-sock
+                mountPath: /var/run
+              - name: dind-externals
+                mountPath: /home/runner/externals
+              - name: dind-cert
                 mountPath: /certs/client
                 readOnly: true
             - name: dind
-              image: docker:24-dind
-              securityContext:
-                privileged: true
+              image: docker:dind
+              args:
+              - dockerd
+              - --host=unix:///var/run/docker.sock
+              - --host=tcp://0.0.0.0:2376
+              - --tlsverify
+              - --tlscacert=/certs/server/ca.pem
+              - --tlscert=/certs/server/cert.pem
+              - --tlskey=/certs/server/key.pem
               env:
               - name: DOCKER_TLS_CERTDIR
                 value: /certs
+              securityContext:
+                privileged: true
               volumeMounts:
               - name: work
                 mountPath: /home/runner/_work
-              - name: certs-client
+              - name: dind-sock
+                mountPath: /var/run
+              - name: dind-cert
                 mountPath: /certs/client
-              - name: certs-ca
-                mountPath: /certs/ca
+              - name: dind-cert-server
+                mountPath: /certs/server
             volumes:
             - name: work
               emptyDir: {}
-            - name: certs-client
+            - name: dind-sock
               emptyDir: {}
-            - name: certs-ca
+            - name: dind-externals
+              emptyDir: {}
+            - name: dind-cert
+              emptyDir: {}
+            - name: dind-cert-server
               emptyDir: {}
   destination:
     server: https://kubernetes.default.svc
