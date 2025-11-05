@@ -1,0 +1,14 @@
+# Git files
+.git
+.gitignore
+
+# Documentation
+README.md
+*.md
+
+# Build artifacts
+*.sh
+.DS_Store
+
+# CI/CD
+.github
