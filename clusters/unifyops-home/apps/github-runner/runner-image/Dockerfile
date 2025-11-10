@@ -92,5 +92,5 @@ RUN echo "=== Verifying tool installations ===" && \
     echo "kubectl: ${KUBECTL_VERSION}" >> /etc/runner-build-info && \
     echo "helm: ${HELM_VERSION}" >> /etc/runner-build-info
 
-# Note: Do NOT set USER, WORKDIR, ENTRYPOINT, or CMD
-# Let the base image configuration remain unchanged for ARC compatibility
+# Switch back to runner user (base image default)
+USER runner

@@ -28,7 +28,7 @@ spec:
           spec:
             containers:
             - name: runner
-              image: harbor.unifyops.io/library/arc-runner-unifyops:v1.6
+              image: harbor.unifyops.io/library/arc-runner-unifyops:v1.7
               imagePullPolicy: Always
             # Harbor registry credentials
             imagePullSecrets:
