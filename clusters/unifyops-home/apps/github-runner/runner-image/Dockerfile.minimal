@@ -14,5 +14,4 @@ RUN curl -fsSL "https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_lin
     chmod +x /usr/local/bin/helm && \
     rm -rf /tmp/linux-amd64
 
-# IMPORTANT: Switch back to runner user to match base image
-USER runner
+# Do NOT set USER back - let base image handle this
