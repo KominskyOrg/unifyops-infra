@@ -74,7 +74,8 @@ RUN curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" -o 
     rm -rf /tmp/helm.tar.gz /tmp/linux-amd64
 
 # Security hardening: Remove setuid/setgid permissions from unnecessary binaries
-RUN find / -xdev -perm /6000 -type f -exec chmod a-s {} \; 2>/dev/null || true
+# DISABLED: This may break runner functionality
+# RUN find / -xdev -perm /6000 -type f -exec chmod a-s {} \; 2>/dev/null || true
 
 # Verify installations and create build info file
 RUN echo "=== Verifying tool installations ===" && \
