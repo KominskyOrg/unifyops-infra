@@ -23,17 +23,16 @@ spec:
         containerMode:
           type: "dind"
 
-        # Custom runner image - ISSUE: Image keeps cycling, needs more investigation
-        # Reverting to official image temporarily
-        # template:
-        #   spec:
-        #     containers:
-        #     - name: runner
-        #       image: harbor.unifyops.io/library/arc-runner-unifyops:v1.5
-        #       imagePullPolicy: Always
-        #     # Harbor registry credentials
-        #     imagePullSecrets:
-        #     - name: harbor-registry-secret
+        # Custom runner image from Harbor registry
+        template:
+          spec:
+            containers:
+            - name: runner
+              image: harbor.unifyops.io/library/arc-runner-unifyops:v1.4
+              imagePullPolicy: Always
+            # Harbor registry credentials
+            imagePullSecrets:
+            - name: harbor-registry-secret
   destination:
     server: https://kubernetes.default.svc
     namespace: github-runners
