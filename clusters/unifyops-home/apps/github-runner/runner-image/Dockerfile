@@ -95,10 +95,10 @@
     # Return to non-root user (runner)
     # --------------------------------------------------------------------
     USER runner
-    
+
     # --------------------------------------------------------------------
-    # Restore proper entrypoint (critical for ARC registration)
+    # Directly run the GitHub Actions runner binary
+    # ARC injects configuration and environment on startup
     # --------------------------------------------------------------------
-    ENTRYPOINT ["/usr/bin/tini", "--", "/entrypoint.sh"]
-    CMD []
-    
+    ENTRYPOINT ["/home/runner/bin/Runner.Listener"]
+    CMD ["run", "--startuptype", "service"]
