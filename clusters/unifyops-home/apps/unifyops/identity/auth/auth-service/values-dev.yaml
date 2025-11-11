@@ -160,7 +160,7 @@ postgresql:
   # Image will use global Harbor registry - run mirror-bitnami-images.sh to populate Harbor
   image:
     repository: bitnami/postgresql
-    tag: 15.4.0-debian-11-r45
+    tag: 16.4.0-debian-12-r13
     pullPolicy: IfNotPresent
   auth:
     existingSecret: "auth-postgresql-secret"  # Use external secret for passwords

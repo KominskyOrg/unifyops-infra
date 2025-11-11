@@ -12,18 +12,19 @@ DOCKER_REGISTRY="docker.io"
 
 # List of Bitnami images to mirror
 IMAGES=(
-    "postgresql:15.4.0-debian-11-r45"
-    "postgresql:15.4.0"
-    "postgresql:15"
-    "postgresql:latest"
-    "redis:7.2"
-    "redis:latest"
-    "mongodb:7.0"
-    "mongodb:latest"
-    "mysql:8.0"
-    "mysql:latest"
-    "rabbitmq:3.12"
-    "rabbitmq:latest"
+    "postgresql:16.4.0-debian-12-r13"
+    # "postgresql:15.4.0-debian-11-r45"
+    # "postgresql:15.4.0"
+    # "postgresql:15"
+    # "postgresql:latest"
+    # "redis:7.2"
+    # "redis:latest"
+    # "mongodb:7.0"
+    # "mongodb:latest"
+    # "mysql:8.0"
+    # "mysql:latest"
+    # "rabbitmq:3.12"
+    # "rabbitmq:latest"
 )
 
 # Colors for output
@@ -52,25 +53,30 @@ fi
 mirror_image() {
     local image=$1
     local source="${DOCKER_REGISTRY}/bitnami/${image}"
+    local legacy_source="${DOCKER_REGISTRY}/bitnamilegacy/${image}"
     local target="${HARBOR_REGISTRY}/${HARBOR_PROJECT}/${image}"
+    local pulled_source=""
 
     echo ""
     echo -e "${YELLOW}Processing: ${image}${NC}"
-    echo "  Source: ${source}"
     echo "  Target: ${target}"
 
-    # Pull from Docker Hub
-    echo -e "${YELLOW}  Pulling from Docker Hub...${NC}"
-    if docker pull "${source}"; then
-        echo -e "${GREEN}  ✓ Pull successful${NC}"
+    # Pull from Docker Hub (try regular repo first, then legacy)
+    echo -e "${YELLOW}  Pulling from Docker Hub (AMD64)...${NC}"
+    if docker pull --platform linux/amd64 "${source}"; then
+        echo -e "${GREEN}  ✓ Pull successful from bitnami${NC}"
+        pulled_source="${source}"
+    elif docker pull --platform linux/amd64 "${legacy_source}"; then
+        echo -e "${GREEN}  ✓ Pull successful from bitnamilegacy${NC}"
+        pulled_source="${legacy_source}"
     else
-        echo -e "${RED}  ✗ Pull failed${NC}"
+        echo -e "${RED}  ✗ Pull failed from both bitnami and bitnamilegacy${NC}"
         return 1
     fi
 
     # Tag for Harbor
     echo -e "${YELLOW}  Tagging for Harbor...${NC}"
-    if docker tag "${source}" "${target}"; then
+    if docker tag "${pulled_source}" "${target}"; then
         echo -e "${GREEN}  ✓ Tag successful${NC}"
     else
         echo -e "${RED}  ✗ Tag failed${NC}"
@@ -83,7 +89,7 @@ mirror_image() {
         echo -e "${GREEN}  ✓ Push successful${NC}"
 
         # Clean up local images to save space
-        docker rmi "${source}" 2>/dev/null || true
+        docker rmi "${pulled_source}" 2>/dev/null || true
         docker rmi "${target}" 2>/dev/null || true
 
         return 0
