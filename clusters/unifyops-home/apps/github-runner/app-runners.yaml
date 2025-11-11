@@ -21,11 +21,6 @@ spec:
         # Runner labels - workflows use these in runs-on
         runnerScaleSetName: "arc-runners"
 
-        # Make runners match 'runs-on: ubuntu-latest' or 'runs-on: arc-runners'
-        template:
-          metadata:
-            labels:
-              runner-set: arc-runners
         controllerServiceAccount:
           namespace: arc-systems
           name: gha-runner-scale-set-controller
