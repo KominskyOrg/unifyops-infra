@@ -8,44 +8,36 @@ global:
   imageRegistry: "harbor.unifyops.io/library"
   imagePullSecrets:
     - name: harbor-registry
-
 # Stack configuration - Drives everything
 stack:
   name: auth
-  appType: app  # Frontend application type
-
+  appType: app # Frontend application type
 # Main deployment configuration
 enabled: true
 replicaCount: 2
-
 # Image configuration
 image:
   repository: "auth-app"
-  tag: "staging-latest"  # Auto-updated by CI/CD to commit SHA
-  pullPolicy: IfNotPresent  # SHA tags are immutable
-
+  tag: "ab9b9458cd7128d83a68cddc62a53f6772e0fa55" # Auto-updated by CI/CD to commit SHA
+  pullPolicy: IfNotPresent # SHA tags are immutable
 # Service configuration
 service:
   type: ClusterIP
-  port: 3000        # Standard web port
-  targetPort: 3000  # Nginx or app server port
+  port: 3000 # Standard web port
+  targetPort: 3000 # Nginx or app server port
   annotations: {}
-
 # Configuration for Frontend App
 config:
   # Common config
-  apiPort: "3000"  # Frontend usually serves on port 80
+  apiPort: "3000" # Frontend usually serves on port 80
   environment: "staging"
-  
   # App-specific config
   apiUrl: "http://auth-api:8002"
-  
   # Additional frontend config
   appTitle: "Auth Management"
   appVersion: "1.0.0"
   featureFlags: "new-ui,dark-mode"
   # Add custom config as needed
-
 # Resources for Frontend (typically lighter than backend)
 resources:
   requests:
@@ -54,7 +46,6 @@ resources:
   limits:
     cpu: 200m
     memory: 256Mi
-
 # Health checks
 probes:
   # Startup probe for SPAs that need build time
@@ -85,30 +76,25 @@ probes:
     periodSeconds: 20
     timeoutSeconds: 1
     failureThreshold: 3
-
 # Autoscaling - Usually not needed for frontends
 autoscaling:
   enabled: false
   minReplicas: 2
   maxReplicas: 4
   targetCPUUtilizationPercentage: 80
-
 # Observability - Not typically used for frontend apps
 observability:
   enabled: false
-
 # Additional environment variables
 env:
   - name: NODE_ENV
     value: "production"
   - name: PUBLIC_URL
     value: "/"
-
 # Placement
 nodeSelector: {}
 tolerations: []
 affinity: {}
-
 # Volumes for nginx temporary directories (required for read-only filesystem)
 volumes:
   - name: nginx-cache
@@ -117,7 +103,6 @@ volumes:
     emptyDir: {}
   - name: nginx-log
     emptyDir: {}
-
 # Volume mounts for nginx directories
 volumeMounts:
   - name: nginx-cache
@@ -126,7 +111,6 @@ volumeMounts:
     mountPath: /var/run
   - name: nginx-log
     mountPath: /var/log/nginx
-
 # Ingress - Automatically enabled for app appType
 ingress:
   enabled: true
@@ -147,42 +131,37 @@ ingress:
     - secretName: staging-unifyops-tls
       hosts:
         - staging.unifyops.io
-
 # Network policies
 networkPolicy:
   enabled: true
-  ingressNamespace: nginx-private  # Use nginx-private namespace for ingress controller
+  ingressNamespace: nginx-private # Use nginx-private namespace for ingress controller
   defaultDeny:
-    ingress: false  # App needs to accept external traffic
-    egress: false   # App needs to call API
-
+    ingress: false # App needs to accept external traffic
+    egress: false # App needs to call API
 # ServiceAccount
 serviceAccount:
   create: true
   annotations: {}
   name: ""
-
 # Pod Security contexts
 podSecurityContext:
   fsGroup: 1000
   runAsNonRoot: true
   runAsUser: 1000
-
 securityContext:
   allowPrivilegeEscalation: false
   capabilities:
     drop:
-    - ALL
+      - ALL
   readOnlyRootFilesystem: true
   runAsNonRoot: true
   runAsUser: 1000
-
 # Note: PostgreSQL and Secrets are NOT included for Frontend Apps
 # Frontends don't need databases or secrets 
 postgresql:
   enabled: false
 secrets:
-  jwtSecret: ""  # Not used by frontend apps
+  jwtSecret: "" # Not used by frontend apps
   existingSecret: ""
   existingSecretJwtKey: "jwt-secret"
 database:
