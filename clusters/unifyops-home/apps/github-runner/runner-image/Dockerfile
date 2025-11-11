@@ -1,14 +1,7 @@
 # syntax=docker/dockerfile:1.4
-# Custom GitHub Actions Runner Image for UnifyOps
+# Minimized GitHub Actions Runner Image for UnifyOps
 # Based on the official GitHub Actions runner image
-# Optimized with pre-installed tools to reduce workflow startup time
-#
-# Security best practices:
-# - Pinned tool versions for reproducibility
-# - SHA256 verification for downloaded binaries
-# - Minimal attack surface with specific package versions
-# - Non-root user execution
-# - Multi-stage build pattern for smaller final image
+# Includes only tools required by our workflows
 
 # Base image - official GitHub Actions runner
 FROM ghcr.io/actions/actions-runner:latest
@@ -25,10 +18,9 @@ ARG HELM_SHA256=f43e1c3387de24547506ab05d24e5309c0ce0b228c23bd8aa64e9ec4b8206651
 
 # Metadata labels (OCI standard)
 LABEL org.opencontainers.image.source="https://github.com/KominskyOrg/unifyops-infra"
-LABEL org.opencontainers.image.description="Custom GitHub Actions runner with pre-installed tools for UnifyOps CI/CD"
+LABEL org.opencontainers.image.description="Minimized GitHub Actions runner with essential tools for UnifyOps CI/CD"
 LABEL org.opencontainers.image.licenses="MIT"
 LABEL org.opencontainers.image.vendor="UnifyOps"
-LABEL org.opencontainers.image.authors="UnifyOps Team"
 LABEL maintainer="UnifyOps Team"
 
 # Tool version labels for easy inspection
@@ -39,19 +31,18 @@ LABEL helm.version="${HELM_VERSION}"
 # Switch to root to install packages
 USER root
 
-# Install essential tools in a single layer to minimize image size
-# Use --no-install-recommends to avoid unnecessary packages
+# Install only essential tools in a single layer
+# - curl: Download binaries and make HTTP requests
+# - git: Git operations (already in base, ensuring version)
+# - jq: JSON processing in workflows
+# - ca-certificates: HTTPS connections
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
     curl=7.* \
-    wget=1.* \
     git=1:2.* \
     jq=1.* \
     ca-certificates \
-    gnupg \
-    unzip=6.* \
-    openssl=3.* \
     && rm -rf /var/lib/apt/lists/*
 
 # Install yq (YAML processor) with version pinning and SHA verification
@@ -72,10 +63,6 @@ RUN curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" -o 
     tar -zxf /tmp/helm.tar.gz -C /tmp && \
     install -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm && \
     rm -rf /tmp/helm.tar.gz /tmp/linux-amd64
-
-# Security hardening: Remove setuid/setgid permissions from unnecessary binaries
-# DISABLED: This may break runner functionality
-# RUN find / -xdev -perm /6000 -type f -exec chmod a-s {} \; 2>/dev/null || true
 
 # Verify installations and create build info file
 RUN echo "=== Verifying tool installations ===" && \
