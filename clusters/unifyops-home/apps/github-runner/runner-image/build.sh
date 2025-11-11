@@ -97,15 +97,17 @@ docker images "${REGISTRY}/${PROJECT}/${IMAGE_NAME}" | head -2
 echo ""
 
 # Show tool versions
+set +e
 echo "Installed tools:"
-docker run --rm "${FULL_IMAGE}" sh -c "
+docker run --rm --entrypoint /bin/sh "${FULL_IMAGE}" -c "
     echo 'yq:      \$(yq --version)'
     echo 'kubectl: \$(kubectl version --client --short 2>/dev/null || kubectl version --client)'
     echo 'helm:    \$(helm version --short)'
     echo 'git:     \$(git --version)'
     echo 'jq:      \$(jq --version)'
-"
-echo ""
+" || echo "(Warning: tool check failed, continuing...)"
+set -e
+
 
 # Security scan (if trivy is available)
 if command -v trivy &> /dev/null; then
