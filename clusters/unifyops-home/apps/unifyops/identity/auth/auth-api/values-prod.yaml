@@ -91,9 +91,10 @@ ingress:
           pathType: Prefix
   tls: []
 # Secrets - Needed for API Gateway (JWT, etc)
+# Use existing sealed secret instead of inline values
 secrets:
-  jwtSecret: "prod-jwt-secret-key"
-  existingSecret: ""
+  jwtSecret: ""  # Do not inline secrets - use existingSecret instead
+  existingSecret: "auth-jwt-secret"  # Reference sealed secret
   existingSecretJwtKey: "jwt-secret"
 # Network policies
 networkPolicy:
