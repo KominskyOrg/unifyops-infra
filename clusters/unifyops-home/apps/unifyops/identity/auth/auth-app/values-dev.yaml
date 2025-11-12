@@ -18,7 +18,7 @@ replicaCount: 1
 # Image configuration
 image:
   repository: "auth-app"
-  tag: "0acd65f7fdad32ba457b3b6399879e642d135a1f" # Updated by CI/CD workflow
+  tag: "b3446d1ff56a8c3701ca68ed99a570eee634c7d3" # Updated by CI/CD workflow
   pullPolicy: IfNotPresent # SHA tags are immutable, no need to always pull
 # Service configuration
 service:
