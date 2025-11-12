@@ -81,7 +81,7 @@ affinity: {}
 # Ingress - Automatically enabled for API appType
 ingress:
   enabled: true
-  className: "nginx"
+  className: "nginx-private"
   annotations:
     # Enable CORS
     nginx.ingress.kubernetes.io/enable-cors: "true"
