@@ -105,6 +105,7 @@ secrets:
 # Network policies
 networkPolicy:
   enabled: true
+  ingressNamespace: nginx-private # Use nginx-private namespace for ingress controller
   defaultDeny:
     ingress: true # API needs to accept external traffic
     egress: true
