@@ -93,17 +93,7 @@ autoscaling:
   targetCPUUtilizationPercentage: 80
 # Observability (only works for api/service appTypes)
 observability:
-  enabled: true
-  otelExporterOtlpEndpoint: "http://otel-collector-daemonset-collector.observability.svc.cluster.local:4317"
-  otelExporterOtlpInsecure: "true"
-  serviceVersion: "1.0.0"
-  deploymentEnvironment: "development"
-  httpCaptureHeaders:
-    request: "content-type,accept,authorization"
-    response: "content-type"
-  annotations:
-    instrumentation.opentelemetry.io/inject-python: "observability/traces-instrumentation"
-    instrumentation.opentelemetry.io/otel-python-platform: "glibc"
+  enabled: false
 # Additional environment variables
 env:
   - name: DB_PASSWORD
