@@ -111,6 +111,8 @@ env:
       secretKeyRef:
         name: auth-postgresql-secret
         key: postgres-password
+  - name: DATABASE_URL
+    value: "postgresql://postgres:$(DB_PASSWORD)@auth-service-postgresql:5432/auth_db"
 # - name: CUSTOM_FEATURE_FLAG
 #   value: "enabled"
 # - name: EXTERNAL_API_KEY
