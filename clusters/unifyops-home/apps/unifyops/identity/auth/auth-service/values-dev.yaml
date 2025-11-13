@@ -18,7 +18,7 @@ replicaCount: 1
 # Image configuration
 image:
   repository: "auth-service"
-  tag: "ab9b9458cd7128d83a68cddc62a53f6772e0fa55" # Updated by CI/CD workflow
+  tag: "527de9294e189f5c85549b4197c6cf3f34f4b2a4" # Updated by CI/CD workflow
   pullPolicy: IfNotPresent # SHA tags are immutable, no need to always pull
 # Service configuration
 service:
@@ -39,12 +39,12 @@ config:
   logLevel: "debug" # Temporary for troubleshooting migrations
   # API-specific config (only used when appType=api)
   # serviceUrl: "http://identity-service:8001"
+# App-specific config (only used when appType=app)
+# apiUrl: "http://identity-api:8000"
 
-  # App-specific config (only used when appType=app)
-  # apiUrl: "http://identity-api:8000"
+# Add any custom config here - will be auto-added to ConfigMap
+# customFeatureFlag: "enabled"
 
-  # Add any custom config here - will be auto-added to ConfigMap
-  # customFeatureFlag: "enabled"
 # Database configuration (only used when appType=service)
 database:
   enabled: true # Can disable if service doesn't need DB
@@ -82,9 +82,9 @@ probes:
       port: 8001
     initialDelaySeconds: 30
     periodSeconds: 20
-  # Startup probe (optional, mainly for apps)
-  # startup:
-  #   enabled: false
+    # Startup probe (optional, mainly for apps)
+    # startup:
+    #   enabled: false
 # Autoscaling
 autoscaling:
   enabled: false
