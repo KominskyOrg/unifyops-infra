@@ -33,7 +33,7 @@ config:
   environment: "development"
   # Service-specific config (only used when appType=service)
   databaseSchema: "{{ .Values.stack.name }}"
-  skipMigrations: "false"
+  skipMigrations: "true"  # Migrations run via pre-install/pre-upgrade Job
   logStyle: "otel"
   enableOtelLogging: "true"
   logLevel: "debug" # Temporary for troubleshooting migrations
