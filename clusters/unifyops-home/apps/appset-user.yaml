@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: auth-stack
+  name: user-stack
   namespace: argocd
 spec:
   generators:
@@ -31,9 +31,9 @@ spec:
                   port: "3000"   # quoted
   template:
     metadata:
-      name: '{{env}}-auth-{{appType}}'
+      name: '{{env}}-user-{{appType}}'
       labels:
-        stack: auth
+        stack: user
         appType: '{{appType}}'
         environment: '{{env}}'
     spec:
@@ -44,7 +44,7 @@ spec:
           targetRevision: "0.1.10"
           helm:
             valueFiles:
-              - $values/clusters/unifyops-home/apps/unifyops/identity/auth/auth-{{appType}}/values-{{env}}.yaml
+              - $values/clusters/unifyops-home/apps/unifyops/identity/user/user-{{appType}}/values-{{env}}.yaml
         - repoURL: https://github.com/KominskyOrg/unifyops-infra.git
           targetRevision: '{{branch}}'
           ref: values
