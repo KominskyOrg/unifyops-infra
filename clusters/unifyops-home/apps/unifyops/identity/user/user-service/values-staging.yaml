@@ -1,0 +1,220 @@
+# Simplified Service Deployment Values for Authentication Service
+# This uses the new simplified approach with single deployment based on appType
+# Usage: helm install auth-service uo-infra-helm/ -f deployment-values.yaml
+
+# Global configuration
+global:
+  namespace: "uo-staging"
+  imageRegistry: "harbor.unifyops.io/library"
+  imagePullSecrets:
+    - name: harbor-registry
+# Stack configuration - This drives everything
+stack:
+  name: auth
+  appType: service # This determines the deployment type: app, api, or service
+# Main deployment configuration (adapts based on appType)
+enabled: true
+replicaCount: 2
+# Image configuration
+image:
+  repository: "auth-service"
+  tag: "ab9b9458cd7128d83a68cddc62a53f6772e0fa55" # Auto-updated by CI/CD to commit SHA
+  pullPolicy: IfNotPresent # SHA tags are immutable
+# Service configuration
+service:
+  type: ClusterIP
+  port: 8001 # External port
+  targetPort: 8001 # Container port
+  annotations: {}
+# Configuration (adapts based on appType)
+config:
+  # Common config for all appTypes
+  apiPort: "8001"
+  environment: "staging"
+  # Service-specific config (only used when appType=service)
+  databaseSchema: "{{ .Values.stack.name }}"
+  skipMigrations: "true"  # Migrations run via pre-install/pre-upgrade Job
+  logStyle: "otel"
+  enableOtelLogging: "true"
+  logLevel: "debug" # Temporary for troubleshooting migrations
+  # API-specific config (only used when appType=api)
+  # serviceUrl: "http://identity-service:8001"
+
+  # App-specific config (only used when appType=app)
+  # apiUrl: "http://identity-api:8000"
+
+  # Add any custom config here - will be auto-added to ConfigMap
+  # customFeatureFlag: "enabled"
+# Database configuration (only used when appType=service)
+database:
+  enabled: true # Can disable if service doesn't need DB
+  # URL will use DB_PASSWORD from secret at runtime
+  url: "postgresql://postgres:${DB_PASSWORD}@{{ .Values.stack.name }}-service-postgresql:5432/{{ .Values.stack.name }}_db"
+  external:
+    enabled: false
+    # host: "external-db.example.com"
+    # port: 5432
+    # database: "identity_db"
+    # username: "identity_user"
+    # existingSecret: "identity-db-secret"
+    # existingSecretPasswordKey: "password"
+# Resource limits
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+# Health checks
+probes:
+  readiness:
+    enabled: true
+    httpGet:
+      path: "/{{ .Values.stack.appType }}/{{ .Values.stack.name }}/health"
+      port: 8001
+    initialDelaySeconds: 10
+    periodSeconds: 10
+  liveness:
+    enabled: true
+    httpGet:
+      path: "/{{ .Values.stack.appType }}/{{ .Values.stack.name }}/health"
+      port: 8001
+    initialDelaySeconds: 30
+    periodSeconds: 20
+  # Startup probe (optional, mainly for apps)
+  # startup:
+  #   enabled: false
+# Autoscaling
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+# Observability (only works for api/service appTypes)
+observability:
+  enabled: true
+  otelExporterOtlpEndpoint: "http://otel-collector-daemonset-collector.observability.svc.cluster.local:4317"
+  otelExporterOtlpInsecure: "true"
+  serviceVersion: "1.0.0"
+  deploymentEnvironment: "staging"
+  httpCaptureHeaders:
+    request: "content-type,accept,authorization"
+    response: "content-type"
+  annotations:
+    instrumentation.opentelemetry.io/inject-python: "observability/traces-instrumentation"
+    instrumentation.opentelemetry.io/otel-python-platform: "glibc"
+# Additional environment variables
+env:
+  - name: DB_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: auth-postgresql-secret
+        key: postgres-password
+  - name: DATABASE_URL
+    value: "postgresql://postgres:$(DB_PASSWORD)@auth-service-postgresql:5432/auth_db"
+# - name: CUSTOM_FEATURE_FLAG
+#   value: "enabled"
+# - name: EXTERNAL_API_KEY
+#   valueFrom:
+#     secretKeyRef:
+#       name: external-api-secret
+#       key: api-key
+
+# Placement
+nodeSelector: {}
+tolerations: []
+affinity: {}
+# Ingress configuration (automatically ignored for service appType)
+ingress:
+  enabled: false # Services typically don't need ingress
+  className: "nginx-private"
+  annotations: {}
+  hosts:
+    - host: staging.unifyops.io
+      paths:
+        - path: "/{{ .Values.stack.appType }}/{{ .Values.stack.name }}"
+          pathType: Prefix
+  tls: []
+# Secrets (used by api/service appTypes)
+secrets:
+  existingSecret: "auth-jwt-secret" # Use external secret for JWT
+  existingSecretJwtKey: "jwt-secret"
+# PostgreSQL subchart (only deployed when appType=service and database.enabled=true)
+postgresql:
+  enabled: true
+  global:
+    imageRegistry: "" # Empty string to prevent inheriting Harbor registry
+  image:
+    repository: bitnami/postgresql
+    tag: 16.4.0-debian-12-r13
+    pullPolicy: IfNotPresent
+  imagePullSecrets: [] # Don't use Harbor pull secrets
+  auth:
+    existingSecret: "auth-postgresql-secret" # Use external secret for passwords
+    secretKeys:
+      adminPasswordKey: "postgres-password"
+      userPasswordKey: "password"
+      replicationPasswordKey: "replication-password"
+    username: "postgres"
+    database: "auth_db" # Will be overridden by Makefile: $(STACK)_db
+  primary:
+    persistence:
+      enabled: true
+      size: 5Gi
+      storageClass: longhorn
+    # Standard Kubernetes security context - works across all environments
+    podSecurityContext:
+      fsGroup: 1001 # Ensures volume is mounted with correct group ownership
+    containerSecurityContext:
+      runAsUser: 1001
+      runAsNonRoot: true
+    # Universal init container approach for permission fixes
+    initContainers:
+      - name: volume-permissions
+        image: busybox:1.35
+        command: ['sh', '-c', 'chown -R 1001:1001 /bitnami/postgresql && chmod -R 755 /bitnami/postgresql']
+        securityContext:
+          runAsUser: 0
+        volumeMounts:
+          - name: data
+            mountPath: /bitnami/postgresql
+    resources:
+      requests:
+        cpu: 250m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    initdb:
+      scripts:
+        init.sql: |
+          CREATE SCHEMA IF NOT EXISTS auth;
+          GRANT ALL PRIVILEGES ON SCHEMA auth TO postgres;
+  fullnameOverride: "auth-service-postgresql"
+# Network policies
+networkPolicy:
+  enabled: true
+  defaultDeny:
+    ingress: true
+    egress: true
+# ServiceAccount
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+# Pod Security contexts
+podSecurityContext:
+  fsGroup: 1000
+  runAsNonRoot: true
+  runAsUser: 1000
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+# Common labels
+commonLabels: {}

@@ -1,0 +1,169 @@
+# Frontend App Deployment Values for Auth
+# Uses the simplified appType-driven approach
+# Usage: helm install auth-app uo-infra-helm/ -f app-values.yaml
+
+# Global configuration
+global:
+  namespace: "uo-dev"
+  imageRegistry: "harbor.unifyops.io/library"
+  imagePullSecrets:
+    - name: harbor-registry
+# Stack configuration - Drives everything
+stack:
+  name: auth
+  appType: app # Frontend application type
+# Main deployment configuration
+enabled: true
+replicaCount: 1
+# Image configuration
+image:
+  repository: "auth-app"
+  tag: "0acd65f7fdad32ba457b3b6399879e642d135a1f" # Updated by CI/CD workflow
+  pullPolicy: IfNotPresent # SHA tags are immutable, no need to always pull
+# Service configuration
+service:
+  type: ClusterIP
+  port: 3000 # Standard web port
+  targetPort: 3000 # Nginx or app server port
+  annotations: {}
+# Configuration for Frontend App
+config:
+  # Common config
+  apiPort: "3000" # Frontend usually serves on port 80
+  environment: "development"
+  # App-specific config
+  apiUrl: "https://dev.unifyops.io/api/auth"
+  # Additional frontend config
+  appTitle: "Auth Management"
+  appVersion: "1.0.0"
+  featureFlags: "new-ui,dark-mode"
+  # Add custom config as needed
+# Resources for Frontend (typically lighter than backend)
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+# Health checks
+probes:
+  # Startup probe for SPAs that need build time
+  startup:
+    enabled: true
+    httpGet:
+      path: "/"
+      port: 3000
+    initialDelaySeconds: 0
+    periodSeconds: 10
+    timeoutSeconds: 1
+    failureThreshold: 30
+  readiness:
+    enabled: true
+    httpGet:
+      path: "/"
+      port: 3000
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 1
+    failureThreshold: 3
+  liveness:
+    enabled: true
+    httpGet:
+      path: "/"
+      port: 3000
+    initialDelaySeconds: 15
+    periodSeconds: 20
+    timeoutSeconds: 1
+    failureThreshold: 3
+# Autoscaling - Usually not needed for frontends
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 80
+# Observability - Not typically used for frontend apps
+observability:
+  enabled: false
+# Additional environment variables
+env:
+  - name: NODE_ENV
+    value: "production"
+  - name: PUBLIC_URL
+    value: "/"
+# Placement
+nodeSelector: {}
+tolerations: []
+affinity: {}
+# Volumes for nginx temporary directories (required for read-only filesystem)
+volumes:
+  - name: nginx-cache
+    emptyDir: {}
+  - name: nginx-run
+    emptyDir: {}
+  - name: nginx-log
+    emptyDir: {}
+# Volume mounts for nginx directories
+volumeMounts:
+  - name: nginx-cache
+    mountPath: /var/cache/nginx
+  - name: nginx-run
+    mountPath: /var/run
+  - name: nginx-log
+    mountPath: /var/log/nginx
+# Ingress - Automatically enabled for app appType
+ingress:
+  enabled: true
+  className: "nginx-private"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    external-dns.alpha.kubernetes.io/hostname: "dev.unifyops.io"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/gzip: "true"
+    nginx.ingress.kubernetes.io/gzip-types: "text/css text/javascript application/javascript application/json"
+  hosts:
+    - host: dev.unifyops.io
+      paths:
+        # Auth app serves at root path - handled by Makefile
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: dev-unifyops-tls
+      hosts:
+        - dev.unifyops.io
+# Network policies
+networkPolicy:
+  enabled: true
+  ingressNamespace: nginx-private # Use nginx-private namespace for ingress controller
+  defaultDeny:
+    ingress: false # App needs to accept external traffic
+    egress: false # App needs to call API
+# ServiceAccount
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+# Pod Security contexts
+podSecurityContext:
+  fsGroup: 1000
+  runAsNonRoot: true
+  runAsUser: 1000
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+# Note: PostgreSQL and Secrets are NOT included for Frontend Apps
+# Frontends don't need databases or secrets 
+postgresql:
+  enabled: false
+secrets:
+  jwtSecret: "" # Not used by frontend apps
+  existingSecret: ""
+  existingSecretJwtKey: "jwt-secret"
+database:
+  waitForReady: false
+  readinessTimeout: 0
