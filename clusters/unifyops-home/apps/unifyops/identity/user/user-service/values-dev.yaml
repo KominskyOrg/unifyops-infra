@@ -1,6 +1,6 @@
-# Simplified Service Deployment Values for Authentication Service
+# Simplified Service Deployment Values for User Service
 # This uses the new simplified approach with single deployment based on appType
-# Usage: helm install auth-service uo-infra-helm/ -f deployment-values.yaml
+# Usage: helm install user-service uo-infra-helm/ -f deployment-values.yaml
 
 # Global configuration
 global:
@@ -10,14 +10,14 @@ global:
     - name: harbor-registry
 # Stack configuration - This drives everything
 stack:
-  name: auth
+  name: user
   appType: service # This determines the deployment type: app, api, or service
 # Main deployment configuration (adapts based on appType)
 enabled: true
 replicaCount: 1
 # Image configuration
 image:
-  repository: "auth-service"
+  repository: "user-service"
   tag: "5dc5409bb72921f7584cc5f5917f12cabd6f9d6b" # Updated by CI/CD workflow
   pullPolicy: IfNotPresent # SHA tags are immutable, no need to always pull
 # Service configuration
@@ -109,10 +109,10 @@ env:
   - name: DB_PASSWORD
     valueFrom:
       secretKeyRef:
-        name: auth-postgresql-secret
+        name: user-postgresql-secret
         key: postgres-password
   - name: DATABASE_URL
-    value: "postgresql://postgres:$(DB_PASSWORD)@auth-service-postgresql:5432/auth_db"
+    value: "postgresql://postgres:$(DB_PASSWORD)@user-service-postgresql:5432/user_db"
 # - name: CUSTOM_FEATURE_FLAG
 #   value: "enabled"
 # - name: EXTERNAL_API_KEY
@@ -138,7 +138,7 @@ ingress:
   tls: []
 # Secrets (used by api/service appTypes)
 secrets:
-  existingSecret: "auth-jwt-secret" # Use external secret for JWT
+  existingSecret: "user-jwt-secret" # Use external secret for JWT
   existingSecretJwtKey: "jwt-secret"
 # PostgreSQL subchart (only deployed when appType=service and database.enabled=true)
 postgresql:
@@ -149,13 +149,13 @@ postgresql:
     tag: 16.4.0-debian-12-r13
     pullPolicy: IfNotPresent
   auth:
-    existingSecret: "auth-postgresql-secret" # Use external secret for passwords
+    existingSecret: "user-postgresql-secret" # Use external secret for passwords
     secretKeys:
       adminPasswordKey: "postgres-password"
       userPasswordKey: "password"
       replicationPasswordKey: "replication-password"
     username: "postgres"
-    database: "auth_db" # Will be overridden by Makefile: $(STACK)_db
+    database: "user_db" # Will be overridden by Makefile: $(STACK)_db
   primary:
     persistence:
       enabled: true
@@ -187,9 +187,9 @@ postgresql:
     initdb:
       scripts:
         init.sql: |
-          CREATE SCHEMA IF NOT EXISTS auth;
-          GRANT ALL PRIVILEGES ON SCHEMA auth TO postgres;
-  fullnameOverride: "auth-service-postgresql"
+          CREATE SCHEMA IF NOT EXISTS user;
+          GRANT ALL PRIVILEGES ON SCHEMA user TO postgres;
+  fullnameOverride: "user-service-postgresql"
 # Network policies
 networkPolicy:
   enabled: true
