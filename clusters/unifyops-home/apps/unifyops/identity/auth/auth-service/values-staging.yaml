@@ -18,7 +18,7 @@ replicaCount: 2
 # Image configuration
 image:
   repository: "auth-service"
-  tag: "ab9b9458cd7128d83a68cddc62a53f6772e0fa55" # Auto-updated by CI/CD to commit SHA
+  tag: "b5a051d12ab447990c8f7b9d2e8be0c90fd6855a" # Auto-updated by CI/CD to commit SHA
   pullPolicy: IfNotPresent # SHA tags are immutable
 # Service configuration
 service:
@@ -33,7 +33,7 @@ config:
   environment: "staging"
   # Service-specific config (only used when appType=service)
   databaseSchema: "{{ .Values.stack.name }}"
-  skipMigrations: "true"  # Migrations run via pre-install/pre-upgrade Job
+  skipMigrations: "true" # Migrations run via pre-install/pre-upgrade Job
   logStyle: "otel"
   enableOtelLogging: "true"
   logLevel: "debug" # Temporary for troubleshooting migrations
