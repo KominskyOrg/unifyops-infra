@@ -17,6 +17,7 @@ resources:
   # If you have an ArgoCD App-of-Apps or root Applications
   - root-apps.yaml
   - appset-auth.yaml
+  - appset-user.yaml
 
   # Each subdir has its own kustomization.yaml
   - argocd/

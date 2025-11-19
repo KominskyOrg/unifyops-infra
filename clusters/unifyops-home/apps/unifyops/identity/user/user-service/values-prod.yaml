@@ -4,7 +4,7 @@
 
 # Global configuration
 global:
-  namespace: "uo-staging"
+  namespace: "uo-prod"
   imageRegistry: "harbor.unifyops.io/library"
   imagePullSecrets:
     - name: harbor-registry
@@ -14,11 +14,11 @@ stack:
   appType: service # This determines the deployment type: app, api, or service
 # Main deployment configuration (adapts based on appType)
 enabled: true
-replicaCount: 2
+replicaCount: 3
 # Image configuration
 image:
   repository: "auth-service"
-  tag: "b5a051d12ab447990c8f7b9d2e8be0c90fd6855a" # Auto-updated by CI/CD to commit SHA
+  tag: "527de9294e189f5c85549b4197c6cf3f34f4b2a4" # Auto-updated by CI/CD to commit SHA
   pullPolicy: IfNotPresent # SHA tags are immutable
 # Service configuration
 service:
@@ -30,13 +30,13 @@ service:
 config:
   # Common config for all appTypes
   apiPort: "8001"
-  environment: "staging"
+  environment: "production"
   # Service-specific config (only used when appType=service)
   databaseSchema: "{{ .Values.stack.name }}"
-  skipMigrations: "true" # Migrations run via pre-install/pre-upgrade Job
+  skipMigrations: "false"
   logStyle: "otel"
   enableOtelLogging: "true"
-  logLevel: "debug" # Temporary for troubleshooting migrations
+  logLevel: "warning" # Temporary for troubleshooting migrations
   # API-specific config (only used when appType=api)
   # serviceUrl: "http://identity-service:8001"
 # App-specific config (only used when appType=app)
@@ -87,13 +87,23 @@ probes:
     #   enabled: false
 # Autoscaling
 autoscaling:
-  enabled: false
+  enabled: true
   minReplicas: 2
   maxReplicas: 10
   targetCPUUtilizationPercentage: 80
 # Observability (only works for api/service appTypes)
 observability:
-  enabled: false
+  enabled: true
+  otelExporterOtlpEndpoint: "http://otel-collector-daemonset-collector.observability.svc.cluster.local:4317"
+  otelExporterOtlpInsecure: "true"
+  serviceVersion: "1.0.0"
+  deploymentEnvironment: "production"
+  httpCaptureHeaders:
+    request: "content-type,accept,authorization"
+    response: "content-type"
+  annotations:
+    instrumentation.opentelemetry.io/inject-python: "observability/traces-instrumentation"
+    instrumentation.opentelemetry.io/otel-python-platform: "glibc"
 # Additional environment variables
 env:
   - name: DB_PASSWORD
@@ -101,8 +111,6 @@ env:
       secretKeyRef:
         name: auth-postgresql-secret
         key: postgres-password
-  - name: DATABASE_URL
-    value: "postgresql://postgres:$(DB_PASSWORD)@auth-service-postgresql:5432/auth_db"
 # - name: CUSTOM_FEATURE_FLAG
 #   value: "enabled"
 # - name: EXTERNAL_API_KEY
@@ -121,7 +129,7 @@ ingress:
   className: "nginx-private"
   annotations: {}
   hosts:
-    - host: staging.unifyops.io
+    - host: api.unifyops.io
       paths:
         - path: "/{{ .Values.stack.appType }}/{{ .Values.stack.name }}"
           pathType: Prefix
@@ -133,11 +141,13 @@ secrets:
 # PostgreSQL subchart (only deployed when appType=service and database.enabled=true)
 postgresql:
   enabled: true
-  # Image will use global Harbor registry - run mirror-bitnami-images.sh to populate Harbor
+  global:
+    imageRegistry: "" # Empty string to prevent inheriting Harbor registry
   image:
     repository: bitnami/postgresql
     tag: 16.4.0-debian-12-r13
     pullPolicy: IfNotPresent
+  imagePullSecrets: [] # Don't use Harbor pull secrets
   auth:
     existingSecret: "auth-postgresql-secret" # Use external secret for passwords
     secretKeys:
@@ -149,7 +159,7 @@ postgresql:
   primary:
     persistence:
       enabled: true
-      size: 5Gi
+      size: 20Gi
       storageClass: longhorn
     # Standard Kubernetes security context - works across all environments
     podSecurityContext:

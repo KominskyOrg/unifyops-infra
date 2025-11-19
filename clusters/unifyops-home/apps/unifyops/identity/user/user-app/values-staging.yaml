@@ -4,7 +4,7 @@
 
 # Global configuration
 global:
-  namespace: "uo-prod"
+  namespace: "uo-staging"
   imageRegistry: "harbor.unifyops.io/library"
   imagePullSecrets:
     - name: harbor-registry
@@ -14,11 +14,11 @@ stack:
   appType: app # Frontend application type
 # Main deployment configuration
 enabled: true
-replicaCount: 3
+replicaCount: 2
 # Image configuration
 image:
   repository: "auth-app"
-  tag: "fceb0f3e167e8620d0c42024c8ae8241271f1abe" # Auto-updated by CI/CD to commit SHA
+  tag: "ab9b9458cd7128d83a68cddc62a53f6772e0fa55" # Auto-updated by CI/CD to commit SHA
   pullPolicy: IfNotPresent # SHA tags are immutable
 # Service configuration
 service:
@@ -30,7 +30,7 @@ service:
 config:
   # Common config
   apiPort: "3000" # Frontend usually serves on port 80
-  environment: "production"
+  environment: "staging"
   # App-specific config
   apiUrl: "http://auth-api:8002"
   # Additional frontend config
@@ -116,21 +116,25 @@ ingress:
   enabled: true
   className: "nginx-private"
   annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    external-dns.alpha.kubernetes.io/hostname: "staging.unifyops.io"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/gzip: "true"
     nginx.ingress.kubernetes.io/gzip-types: "text/css text/javascript application/javascript application/json"
   hosts:
-    - host: app.unifyops.io
+    - host: staging.unifyops.io
       paths:
         # Auth app serves at root path - handled by Makefile
         - path: /
           pathType: Prefix
   tls:
-    - secretName: prod-unifyops-tls
+    - secretName: staging-unifyops-tls
       hosts:
-        - app.unifyops.io
+        - staging.unifyops.io
 # Network policies
 networkPolicy:
   enabled: true
+  ingressNamespace: nginx-private # Use nginx-private namespace for ingress controller
   defaultDeny:
     ingress: false # App needs to accept external traffic
     egress: false # App needs to call API

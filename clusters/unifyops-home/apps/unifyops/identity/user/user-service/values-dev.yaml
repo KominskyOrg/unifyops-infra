@@ -4,7 +4,7 @@
 
 # Global configuration
 global:
-  namespace: "uo-staging"
+  namespace: "uo-dev"
   imageRegistry: "harbor.unifyops.io/library"
   imagePullSecrets:
     - name: harbor-registry
@@ -14,12 +14,12 @@ stack:
   appType: service # This determines the deployment type: app, api, or service
 # Main deployment configuration (adapts based on appType)
 enabled: true
-replicaCount: 2
+replicaCount: 1
 # Image configuration
 image:
   repository: "auth-service"
-  tag: "b5a051d12ab447990c8f7b9d2e8be0c90fd6855a" # Auto-updated by CI/CD to commit SHA
-  pullPolicy: IfNotPresent # SHA tags are immutable
+  tag: "527de9294e189f5c85549b4197c6cf3f34f4b2a4" # Updated by CI/CD workflow
+  pullPolicy: IfNotPresent # SHA tags are immutable, no need to always pull
 # Service configuration
 service:
   type: ClusterIP
@@ -30,10 +30,10 @@ service:
 config:
   # Common config for all appTypes
   apiPort: "8001"
-  environment: "staging"
+  environment: "development"
   # Service-specific config (only used when appType=service)
   databaseSchema: "{{ .Values.stack.name }}"
-  skipMigrations: "true" # Migrations run via pre-install/pre-upgrade Job
+  skipMigrations: "true"  # Migrations run via pre-install/pre-upgrade Job
   logStyle: "otel"
   enableOtelLogging: "true"
   logLevel: "debug" # Temporary for troubleshooting migrations
@@ -93,7 +93,17 @@ autoscaling:
   targetCPUUtilizationPercentage: 80
 # Observability (only works for api/service appTypes)
 observability:
-  enabled: false
+  enabled: true
+  otelExporterOtlpEndpoint: "http://otel-collector-daemonset-collector.observability.svc.cluster.local:4317"
+  otelExporterOtlpInsecure: "true"
+  serviceVersion: "1.0.0"
+  deploymentEnvironment: "development"
+  httpCaptureHeaders:
+    request: "content-type,accept,authorization"
+    response: "content-type"
+  annotations:
+    instrumentation.opentelemetry.io/inject-python: "observability/traces-instrumentation"
+    instrumentation.opentelemetry.io/otel-python-platform: "glibc"
 # Additional environment variables
 env:
   - name: DB_PASSWORD
@@ -121,7 +131,7 @@ ingress:
   className: "nginx-private"
   annotations: {}
   hosts:
-    - host: staging.unifyops.io
+    - host: dev.unifyops.io
       paths:
         - path: "/{{ .Values.stack.appType }}/{{ .Values.stack.name }}"
           pathType: Prefix
@@ -149,7 +159,7 @@ postgresql:
   primary:
     persistence:
       enabled: true
-      size: 5Gi
+      size: 1Gi
       storageClass: longhorn
     # Standard Kubernetes security context - works across all environments
     podSecurityContext:

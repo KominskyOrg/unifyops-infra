@@ -4,21 +4,21 @@
 
 # Global configuration
 global:
-  namespace: "uo-staging"
+  namespace: "uo-prod"
   imageRegistry: "harbor.unifyops.io/library"
   imagePullSecrets:
     - name: harbor-registry
 # Stack configuration - Drives everything
 stack:
-  name: auth
+  name: user
   appType: api
 # Main deployment configuration
 enabled: true
-replicaCount: 2
+replicaCount: 1
 # Image configuration
 image:
-  repository: "auth-api"
-  tag: "b5a051d12ab447990c8f7b9d2e8be0c90fd6855a" # Auto-updated by CI/CD to commit SHA
+  repository: "user-api"
+  tag: "ab9b9458cd7128d83a68cddc62a53f6772e0fa55" # Auto-updated by CI/CD to commit SHA
   pullPolicy: IfNotPresent # SHA tags are immutable
 # Service configuration
 service:
@@ -30,9 +30,9 @@ service:
 config:
   # Common config
   apiPort: "8002"
-  environment: "staging"
+  environment: "production"
   # API-specific config
-  serviceUrl: "http://auth-service:8001" # Backend service URL
+  serviceUrl: "http://user-service:8001" # Backend service URL
   # Additional API Gateway config
   rateLimitPerMinute: "100"
   corsAllowedOrigins: "*"
@@ -50,14 +50,14 @@ probes:
   readiness:
     enabled: true
     httpGet:
-      path: "/api/auth/health"
+      path: "/api/user/health"
       port: 8002
     initialDelaySeconds: 10
     periodSeconds: 10
   liveness:
     enabled: true
     httpGet:
-      path: "/api/auth/health"
+      path: "/api/user/health"
       port: 8002
     initialDelaySeconds: 30
     periodSeconds: 20
@@ -81,31 +81,24 @@ affinity: {}
 # Ingress - Automatically enabled for API appType
 ingress:
   enabled: true
-  className: "nginx-private"
+  className: "nginx"
   annotations:
-    # Enable CORS
-    nginx.ingress.kubernetes.io/enable-cors: "true"
     nginx.ingress.kubernetes.io/cors-allow-origin: "*"
-    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, PATCH, OPTIONS"
-    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization"
-    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
-    nginx.ingress.kubernetes.io/cors-max-age: "1728000"
   hosts:
-    - host: staging.unifyops.io
+    - host: prod.unifyops.io
       paths:
-        - path: /api/auth
+        - path: /api/user
           pathType: Prefix
   tls: []
 # Secrets - Needed for API Gateway (JWT, etc)
 # Use existing sealed secret instead of inline values
 secrets:
-  jwtSecret: "" # Do not inline secrets - use existingSecret instead
-  existingSecret: "auth-jwt-secret" # Reference sealed secret
+  jwtSecret: ""  # Do not inline secrets - use existingSecret instead
+  existingSecret: "user-jwt-secret"  # Reference sealed secret
   existingSecretJwtKey: "jwt-secret"
 # Network policies
 networkPolicy:
   enabled: true
-  ingressNamespace: nginx-private # Use nginx-private namespace for ingress controller
   defaultDeny:
     ingress: true # API needs to accept external traffic
     egress: true

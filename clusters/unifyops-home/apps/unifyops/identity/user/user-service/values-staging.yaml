@@ -18,7 +18,7 @@ replicaCount: 2
 # Image configuration
 image:
   repository: "auth-service"
-  tag: "b5a051d12ab447990c8f7b9d2e8be0c90fd6855a" # Auto-updated by CI/CD to commit SHA
+  tag: "ab9b9458cd7128d83a68cddc62a53f6772e0fa55" # Auto-updated by CI/CD to commit SHA
   pullPolicy: IfNotPresent # SHA tags are immutable
 # Service configuration
 service:
@@ -33,18 +33,18 @@ config:
   environment: "staging"
   # Service-specific config (only used when appType=service)
   databaseSchema: "{{ .Values.stack.name }}"
-  skipMigrations: "true" # Migrations run via pre-install/pre-upgrade Job
+  skipMigrations: "true"  # Migrations run via pre-install/pre-upgrade Job
   logStyle: "otel"
   enableOtelLogging: "true"
   logLevel: "debug" # Temporary for troubleshooting migrations
   # API-specific config (only used when appType=api)
   # serviceUrl: "http://identity-service:8001"
-# App-specific config (only used when appType=app)
-# apiUrl: "http://identity-api:8000"
 
-# Add any custom config here - will be auto-added to ConfigMap
-# customFeatureFlag: "enabled"
+  # App-specific config (only used when appType=app)
+  # apiUrl: "http://identity-api:8000"
 
+  # Add any custom config here - will be auto-added to ConfigMap
+  # customFeatureFlag: "enabled"
 # Database configuration (only used when appType=service)
 database:
   enabled: true # Can disable if service doesn't need DB
@@ -82,9 +82,9 @@ probes:
       port: 8001
     initialDelaySeconds: 30
     periodSeconds: 20
-    # Startup probe (optional, mainly for apps)
-    # startup:
-    #   enabled: false
+  # Startup probe (optional, mainly for apps)
+  # startup:
+  #   enabled: false
 # Autoscaling
 autoscaling:
   enabled: false
@@ -93,7 +93,17 @@ autoscaling:
   targetCPUUtilizationPercentage: 80
 # Observability (only works for api/service appTypes)
 observability:
-  enabled: false
+  enabled: true
+  otelExporterOtlpEndpoint: "http://otel-collector-daemonset-collector.observability.svc.cluster.local:4317"
+  otelExporterOtlpInsecure: "true"
+  serviceVersion: "1.0.0"
+  deploymentEnvironment: "staging"
+  httpCaptureHeaders:
+    request: "content-type,accept,authorization"
+    response: "content-type"
+  annotations:
+    instrumentation.opentelemetry.io/inject-python: "observability/traces-instrumentation"
+    instrumentation.opentelemetry.io/otel-python-platform: "glibc"
 # Additional environment variables
 env:
   - name: DB_PASSWORD
@@ -133,11 +143,13 @@ secrets:
 # PostgreSQL subchart (only deployed when appType=service and database.enabled=true)
 postgresql:
   enabled: true
-  # Image will use global Harbor registry - run mirror-bitnami-images.sh to populate Harbor
+  global:
+    imageRegistry: "" # Empty string to prevent inheriting Harbor registry
   image:
     repository: bitnami/postgresql
     tag: 16.4.0-debian-12-r13
     pullPolicy: IfNotPresent
+  imagePullSecrets: [] # Don't use Harbor pull secrets
   auth:
     existingSecret: "auth-postgresql-secret" # Use external secret for passwords
     secretKeys:
