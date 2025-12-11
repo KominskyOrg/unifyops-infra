@@ -8,29 +8,24 @@ global:
   imageRegistry: "harbor.unifyops.io/library"
   imagePullSecrets:
     - name: harbor-registry
-
 # Stack configuration - Drives everything
 stack:
   name: user
   appType: app # Frontend application type
-
 # Main deployment configuration
 enabled: true
 replicaCount: 1
-
 # Image configuration
 image:
   repository: "user-app"
-  tag: "latest" # Updated by CI/CD workflow
+  tag: "37d8d32abdee65f7a82b2721e510d90d2dac2e33" # Updated by CI/CD workflow
   pullPolicy: Always # Use Always for latest tag in dev
-
 # Service configuration
 service:
   type: ClusterIP
   port: 3000 # Standard web port
   targetPort: 3000 # Nginx or app server port
   annotations: {}
-
 # Configuration for Frontend App
 config:
   # Common config
@@ -43,7 +38,6 @@ config:
   appTitle: "User Profile"
   appVersion: "1.0.0"
   featureFlags: ""
-
 # Resources for Frontend (typically lighter than backend)
 resources:
   requests:
@@ -52,7 +46,6 @@ resources:
   limits:
     cpu: 200m
     memory: 256Mi
-
 # Health checks
 probes:
   # Startup probe for SPAs that need build time
@@ -83,18 +76,15 @@ probes:
     periodSeconds: 20
     timeoutSeconds: 1
     failureThreshold: 3
-
 # Autoscaling - Usually not needed for frontends
 autoscaling:
   enabled: false
   minReplicas: 2
   maxReplicas: 4
   targetCPUUtilizationPercentage: 80
-
 # Observability - Not typically used for frontend apps
 observability:
   enabled: false
-
 # Additional environment variables
 env:
   - name: NODE_ENV
@@ -109,12 +99,10 @@ env:
     value: "User Profile"
   - name: VITE_APP_VERSION
     value: "1.0.0"
-
 # Placement
 nodeSelector: {}
 tolerations: []
 affinity: {}
-
 # Volumes for nginx temporary directories (required for read-only filesystem)
 volumes:
   - name: nginx-cache
@@ -125,7 +113,6 @@ volumes:
     emptyDir: {}
   - name: tmp
     emptyDir: {}
-
 # Volume mounts for nginx directories
 volumeMounts:
   - name: nginx-cache
@@ -136,7 +123,6 @@ volumeMounts:
     mountPath: /var/log/nginx
   - name: tmp
     mountPath: /tmp
-
 # Ingress - Automatically enabled for app appType
 ingress:
   enabled: true
@@ -157,7 +143,6 @@ ingress:
     - secretName: dev-unifyops-tls
       hosts:
         - dev.unifyops.io
-
 # Network policies
 networkPolicy:
   enabled: true
@@ -165,19 +150,16 @@ networkPolicy:
   defaultDeny:
     ingress: false # App needs to accept external traffic
     egress: false # App needs to call API
-
 # ServiceAccount
 serviceAccount:
   create: true
   annotations: {}
   name: ""
-
 # Pod Security contexts
 podSecurityContext:
   fsGroup: 1000
   runAsNonRoot: true
   runAsUser: 1000
-
 securityContext:
   allowPrivilegeEscalation: false
   capabilities:
@@ -186,17 +168,14 @@ securityContext:
   readOnlyRootFilesystem: true
   runAsNonRoot: true
   runAsUser: 1000
-
 # Note: PostgreSQL and Secrets are NOT included for Frontend Apps
 # Frontends don't need databases or secrets
 postgresql:
   enabled: false
-
 secrets:
   jwtSecret: "" # Not used by frontend apps
   existingSecret: ""
   existingSecretJwtKey: "jwt-secret"
-
 database:
   waitForReady: false
   readinessTimeout: 0
