@@ -18,7 +18,7 @@ replicaCount: 1
 # Image configuration
 image:
   repository: "user-api"
-  tag: "bb855e48fcdcd1dc205efc91fcb0b536834c88b8" # Updated by CI/CD workflow
+  tag: "ca7e9b1f0e0ef096b83f14cd4a53898516c5a112" # Updated by CI/CD workflow
   pullPolicy: Always # Use Always for latest tag in dev
 # Service configuration
 service:
