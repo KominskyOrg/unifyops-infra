@@ -18,7 +18,7 @@ replicaCount: 1
 # Image configuration
 image:
   repository: "user-service"
-  tag: "4ac25f718285dc9faa27259e90b404b71cc3ed6a" # Updated by CI/CD workflow
+  tag: "1199ac23b1569d1de4e1b7f5b8ab3e032f0cc553" # Updated by CI/CD workflow
   pullPolicy: IfNotPresent # SHA tags are immutable, no need to always pull
 # Service configuration
 service:
