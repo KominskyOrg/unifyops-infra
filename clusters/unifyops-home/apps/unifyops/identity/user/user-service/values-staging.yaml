@@ -18,7 +18,7 @@ replicaCount: 2
 # Image configuration
 image:
   repository: "user-service"
-  tag: "faaf9fa17021637d9c0664b1640c9e64c193ad55" # Auto-updated by CI/CD to commit SHA
+  tag: "f0dd8cbdbaac1340c5a3036c759a560f89650fd7" # Auto-updated by CI/CD to commit SHA
   pullPolicy: IfNotPresent # SHA tags are immutable
 # Service configuration
 service:
