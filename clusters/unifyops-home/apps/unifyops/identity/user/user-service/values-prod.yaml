@@ -187,8 +187,8 @@ postgresql:
     initdb:
       scripts:
         init.sql: |
-          CREATE SCHEMA IF NOT EXISTS user;
-          GRANT ALL PRIVILEGES ON SCHEMA user TO postgres;
+          CREATE SCHEMA IF NOT EXISTS "user";
+          GRANT ALL PRIVILEGES ON SCHEMA "user" TO postgres;
   fullnameOverride: "user-service-postgresql"
 # Network policies
 networkPolicy:
