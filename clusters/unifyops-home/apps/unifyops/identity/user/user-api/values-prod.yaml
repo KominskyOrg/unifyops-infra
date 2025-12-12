@@ -8,29 +8,24 @@ global:
   imageRegistry: "harbor.unifyops.io/library"
   imagePullSecrets:
     - name: harbor-registry
-
 # Stack configuration - Drives everything
 stack:
   name: user
   appType: api
-
 # Main deployment configuration
 enabled: true
 replicaCount: 1
-
 # Image configuration
 image:
   repository: "user-api"
-  tag: "latest" # Auto-updated by CI/CD to commit SHA
+  tag: "4ac25f718285dc9faa27259e90b404b71cc3ed6a" # Auto-updated by CI/CD to commit SHA
   pullPolicy: IfNotPresent # SHA tags are immutable
-
 # Service configuration
 service:
   type: ClusterIP
   port: 8002 # api port
   targetPort: 8002
   annotations: {}
-
 # Configuration for API Gateway
 config:
   # Common config
@@ -42,7 +37,6 @@ config:
   # Additional API Gateway config
   rateLimitPerMinute: "100"
   corsAllowedOrigins: "*"
-
 # Resources for API Gateway
 resources:
   requests:
@@ -51,7 +45,6 @@ resources:
   limits:
     cpu: 500m
     memory: 512Mi
-
 # Health checks
 probes:
   readiness:
@@ -68,7 +61,6 @@ probes:
       port: 8002
     initialDelaySeconds: 30
     periodSeconds: 20
-
 # Autoscaling - Often enabled for API Gateways
 autoscaling:
   enabled: true
@@ -76,7 +68,6 @@ autoscaling:
   maxReplicas: 10
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
-
 # Additional environment variables
 env:
   - name: LOG_LEVEL
@@ -91,12 +82,10 @@ env:
     value: "http://auth-api:8002"
   - name: AUTH_API_PREFIX
     value: "/api/auth"
-
 # Placement
 nodeSelector: {}
 tolerations: []
 affinity: {}
-
 # Ingress - Automatically enabled for API appType
 ingress:
   enabled: true
@@ -109,33 +98,28 @@ ingress:
         - path: /api/user
           pathType: Prefix
   tls: []
-
 # Secrets - Needed for API Gateway (JWT, etc)
 # Use existing sealed secret instead of inline values
 secrets:
   jwtSecret: "" # Do not inline secrets - use existingSecret instead
   existingSecret: "user-jwt-secret" # Reference sealed secret
   existingSecretJwtKey: "jwt-secret"
-
 # Network policies
 networkPolicy:
   enabled: true
   defaultDeny:
     ingress: true # API needs to accept external traffic
     egress: true
-
 # ServiceAccount
 serviceAccount:
   create: true
   annotations: {}
   name: ""
-
 # Pod Security contexts
 podSecurityContext:
   fsGroup: 1000
   runAsNonRoot: true
   runAsUser: 1000
-
 securityContext:
   allowPrivilegeEscalation: false
   capabilities:
@@ -144,12 +128,10 @@ securityContext:
   readOnlyRootFilesystem: true
   runAsNonRoot: true
   runAsUser: 1000
-
 # Note: PostgreSQL subchart is NOT included for API Gateway
 # API Gateways don't need databases
 postgresql:
   enabled: false
-
 database:
   waitForReady: false
   readinessTimeout: 0
