@@ -18,7 +18,7 @@ replicaCount: 2
 # Image configuration
 image:
   repository: "user-api"
-  tag: "bb855e48fcdcd1dc205efc91fcb0b536834c88b8" # Auto-updated by CI/CD to commit SHA
+  tag: "ac54bca3095de2ba4e7d97e0828941b36fea9e35" # Auto-updated by CI/CD to commit SHA
   pullPolicy: IfNotPresent # SHA tags are immutable
 # Service configuration
 service:
