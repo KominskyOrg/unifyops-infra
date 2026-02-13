@@ -30,7 +30,7 @@ service:
 config:
   # Common config
   apiPort: "8002"
-  environment: "development"
+  environment: "dev"
   # API-specific config
   serviceUrl: "http://user-service:8001" # Backend service URL
   authApiUrl: "http://auth-api:8002" # Auth API for token validation
