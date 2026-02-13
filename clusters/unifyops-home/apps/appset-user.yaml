@@ -41,7 +41,7 @@ spec:
       sources:
         - repoURL: oci://harbor.unifyops.io/library/unifyops-stack
           chart: unifyops-stack
-          targetRevision: "0.1.15"
+          targetRevision: "0.1.16"
           helm:
             valueFiles:
               - $values/clusters/unifyops-home/apps/unifyops/identity/user/user-{{appType}}/values-{{env}}.yaml
