@@ -30,7 +30,7 @@ service:
 config:
   # Common config for all appTypes
   apiPort: "8001"
-  environment: "development"
+  environment: "dev"
   # Service-specific config (only used when appType=service)
   databaseSchema: "{{ .Values.stack.name }}"
   skipMigrations: "true" # Migrations run via pre-install/pre-upgrade Job
@@ -113,6 +113,11 @@ env:
         key: postgres-password
   - name: DATABASE_URL
     value: "postgresql://postgres:$(DB_PASSWORD)@user-service-postgresql:5432/user_db"
+  - name: SERVICE_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: auth-service-api-keys
+        key: auth-service-key
 # - name: CUSTOM_FEATURE_FLAG
 #   value: "enabled"
 # - name: EXTERNAL_API_KEY
