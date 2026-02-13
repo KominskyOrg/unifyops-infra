@@ -6,7 +6,7 @@ metadata:
 spec:
   project: infra
   source:
-    repoURL: https://github.com/KominskyOrg/unifyops-infra.git
+    repoURL: https://github.com/KominskyOrg/unifyops-infra
     targetRevision: main
     path: clusters/unifyops-home/projects
   destination:

@@ -16,7 +16,7 @@ spec:
     spec:
       project: apps
       source:
-        repoURL: https://github.com/KominskyOrg/unifyops-infra.git
+        repoURL: https://github.com/KominskyOrg/unifyops-infra
         targetRevision: '{{branch}}'
         path: clusters/unifyops-home/apps/unifyops/overlays/{{overlay}}
       destination:

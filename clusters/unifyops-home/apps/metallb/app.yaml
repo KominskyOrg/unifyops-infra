@@ -13,7 +13,7 @@ spec:
       targetRevision: 0.15.2        # or current stable
       helm:
         skipCrds: false             # be explicit: install CRDs from the chart
-    - repoURL: https://github.com/KominskyOrg/unifyops-infra.git
+    - repoURL: https://github.com/KominskyOrg/unifyops-infra
       targetRevision: main
       path: clusters/unifyops-home/apps/metallb/config
   destination:

@@ -12,7 +12,7 @@ spec:
     server: https://kubernetes.default.svc
     namespace: observability
   source:
-    repoURL: https://github.com/KominskyOrg/unifyops-infra.git
+    repoURL: https://github.com/KominskyOrg/unifyops-infra
     targetRevision: main
     path: clusters/unifyops-home/apps/observability/grafana-crds
     kustomize: {}

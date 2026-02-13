@@ -45,7 +45,7 @@ spec:
           helm:
             valueFiles:
               - $values/clusters/unifyops-home/apps/unifyops/identity/auth/auth-{{appType}}/values-{{env}}.yaml
-        - repoURL: https://github.com/KominskyOrg/unifyops-infra.git
+        - repoURL: https://github.com/KominskyOrg/unifyops-infra
           targetRevision: '{{branch}}'
           ref: values
       destination:

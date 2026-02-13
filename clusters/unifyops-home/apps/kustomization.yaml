@@ -18,6 +18,7 @@ resources:
   - root-apps.yaml
   - appset-auth.yaml
   - appset-user.yaml
+  - appset-secrets.yaml
 
   # Each subdir has its own kustomization.yaml
   - argocd/
