@@ -59,10 +59,12 @@ jobs:
 
       - name: Enforce runner/matrix gate semantics
         if: always()
+        env:
+          RUNNER_OUTCOME: ${{ steps.corpus_runner.outcome }}
         run: |
           set -euo pipefail
           non_blocking="${EVIDENCE_CORPUS_NON_BLOCKING,,}"
-          runner_outcome="${{ steps.corpus_runner.outcome }}"
+          runner_outcome="${RUNNER_OUTCOME:-unknown}"
 
           if [[ "${runner_outcome}" != "success" ]]; then
             if [[ "${non_blocking}" == "true" ]]; then

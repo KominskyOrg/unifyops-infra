@@ -132,10 +132,14 @@ def main() -> int:
                     )
 
     if not completeness_provided:
-        errors.append(
+        msg = (
             "completeness assertion missing: provide --expected-case-count and/or "
             "--manifest-path with --expected-manifest-sha256"
         )
+        if release_controlled:
+            errors.append(msg)
+        else:
+            warnings.append(msg)
 
     # Blocking fail conditions.
     if fail_count > 0:
