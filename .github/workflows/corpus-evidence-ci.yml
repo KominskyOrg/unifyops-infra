@@ -27,6 +27,9 @@ jobs:
       CORPUS_MANIFEST_PATH: ${{ vars.CORPUS_MANIFEST_PATH || '' }}
       EXPECTED_CORPUS_MANIFEST_SHA256: ${{ vars.EXPECTED_CORPUS_MANIFEST_SHA256 || '' }}
       UO_EVIDENCE_CORPUS_RUNNER_VERSION: "1.0.0"
+      # Use source-of-truth runner code from unifyops repo to avoid drift in published packages.
+      UO_EVIDENCE_CORPUS_SOURCE_REPO: ${{ vars.UO_EVIDENCE_CORPUS_SOURCE_REPO || format('{0}/unifyops', github.repository_owner) }}
+      UO_EVIDENCE_CORPUS_SOURCE_REF: ${{ vars.UO_EVIDENCE_CORPUS_SOURCE_REF || github.head_ref || github.ref_name }}
 
     steps:
       - uses: actions/checkout@v4
@@ -36,16 +39,25 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install evidence corpus runner dependency (pinned)
+      - name: Checkout unifyops source for corpus runner
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.UO_EVIDENCE_CORPUS_SOURCE_REPO }}
+          ref: ${{ env.UO_EVIDENCE_CORPUS_SOURCE_REF }}
+          path: _deps/unifyops
+
+      - name: Install evidence corpus runner dependency (local source)
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          python -m pip install "unifyops-core==${UO_EVIDENCE_CORPUS_RUNNER_VERSION}"
+          # Local source install is required because published 1.0.0 package variants can import app.config,
+          # which is unavailable in this infra workflow context.
+          python -m pip install -e _deps/unifyops/shared/unifyops_core
 
       - name: Ensure corpus output directories exist
         run: mkdir -p "${CORPUS_OUTPUT_DIR}" "${CORPUS_REPORTS_DIR}"
 
-      - name: Run evidence corpus runner (pinned)
+      - name: Run evidence corpus runner (local source)
         id: corpus_runner
         continue-on-error: true
         run: |
@@ -135,7 +147,9 @@ jobs:
           shopt -s nullglob
           lockfiles=(poetry.lock requirements*.txt)
           if (( ${#lockfiles[@]} == 0 )); then
-            echo "No lockfile evidence present"
+            echo "::warning::No lockfile evidence present (poetry.lock/requirements*.txt not found)."
+            echo "lockfile_path=" >> "$GITHUB_OUTPUT"
+            echo "lockfile_sha256=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           IFS=$'\n' lockfiles=($(printf '%s\n' "${lockfiles[@]}" | sort -u))
