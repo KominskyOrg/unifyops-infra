@@ -117,6 +117,61 @@ jobs:
                   out.write(f"{key}={value}\\n")
           PY
 
+      - name: Emit runner lineage audit fields
+        if: always() && hashFiles('evidence/validator/test-output/corpus-matrix-report-v1.json') != ''
+        run: |
+          set -euo pipefail
+          echo "runner_version=${{ steps.lineage.outputs.runner_version }}"
+          echo "runner_checksum=${{ steps.lineage.outputs.runner_checksum }}"
+          echo "corpus_matrix_sha256=${{ steps.matrix_digest.outputs.corpus_matrix_sha256 }}"
+
+      - name: Emit lockfile SHA-256 (if present)
+        id: lockfile_digest
+        if: always()
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          lockfiles=(poetry.lock requirements*.txt)
+          if (( ${#lockfiles[@]} == 0 )); then
+            echo "No lockfile evidence present"
+            exit 0
+          fi
+          IFS=$'\n' lockfiles=($(printf '%s\n' "${lockfiles[@]}" | sort -u))
+          unset IFS
+          primary="${lockfiles[0]}"
+          primary_sha="$(sha256sum "${primary}" | awk '{print $1}')"
+          echo "lockfile_path=${primary}" >> "$GITHUB_OUTPUT"
+          echo "lockfile_sha256=${primary_sha}" >> "$GITHUB_OUTPUT"
+          echo "lockfile_path=${primary}"
+          echo "lockfile_sha256=${primary_sha}"
+          for lf in "${lockfiles[@]}"; do
+            sha="$(sha256sum "${lf}" | awk '{print $1}')"
+            echo "lockfile_sha256[${lf}]=${sha}"
+          done
+
+      - name: Build corpus artifacts integrity metadata
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p "${CORPUS_OUTPUT_DIR}"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          out = Path(os.environ['CORPUS_OUTPUT_DIR']) / 'corpus-artifacts-metadata.json'
+          data = {
+              'corpus_matrix_path': os.environ.get('CORPUS_MATRIX', ''),
+              'corpus_matrix_sha256': '${{ steps.matrix_digest.outputs.corpus_matrix_sha256 }}',
+              'runner_version': '${{ steps.lineage.outputs.runner_version }}',
+              'runner_checksum': '${{ steps.lineage.outputs.runner_checksum }}',
+              'lockfile_path': '${{ steps.lockfile_digest.outputs.lockfile_path }}',
+              'lockfile_sha256': '${{ steps.lockfile_digest.outputs.lockfile_sha256 }}',
+          }
+          out.write_text(json.dumps(data, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          print(f'wrote metadata: {out}')
+          PY
+
       - name: Validate corpus matrix policy gate
         if: always() && hashFiles('evidence/validator/test-output/corpus-matrix-report-v1.json') != ''
         run: |
@@ -137,6 +192,8 @@ jobs:
             args+=(--manifest-path "${CORPUS_MANIFEST_PATH}" --expected-manifest-sha256 "${EXPECTED_CORPUS_MANIFEST_SHA256}")
           fi
 
+          echo "validate_corpus_matrix.py invocation (blocking parser enforcement path active)"
+          printf '  %q\n' python3 .ci/scripts/validate_corpus_matrix.py "${args[@]}"
           python3 .ci/scripts/validate_corpus_matrix.py "${args[@]}"
 
       - name: Upload corpus matrix artifact
@@ -145,7 +202,9 @@ jobs:
         with:
           name: corpus-matrix-report-v1
           if-no-files-found: warn
-          path: ${{ env.CORPUS_MATRIX }}
+          path: |
+            ${{ env.CORPUS_MATRIX }}
+            ${{ env.CORPUS_OUTPUT_DIR }}/corpus-artifacts-metadata.json
 
       - name: Upload corpus summary artifact
         uses: actions/upload-artifact@v4
@@ -181,6 +240,13 @@ jobs:
           cp "${CORPUS_MATRIX}" evidence/envelope-inputs/
           cp "${CORPUS_SUMMARY}" evidence/envelope-inputs/
           cp -R "${CORPUS_REPORTS_DIR}" evidence/envelope-inputs/
+          if [[ -f "${CORPUS_OUTPUT_DIR}/corpus-artifacts-metadata.json" ]]; then
+            cp "${CORPUS_OUTPUT_DIR}/corpus-artifacts-metadata.json" evidence/envelope-inputs/integrity-metadata.json
+          fi
+          if [[ -n "${{ steps.lockfile_digest.outputs.lockfile_path }}" && -f "${{ steps.lockfile_digest.outputs.lockfile_path }}" ]]; then
+            mkdir -p evidence/envelope-inputs/lockfiles
+            cp "${{ steps.lockfile_digest.outputs.lockfile_path }}" evidence/envelope-inputs/lockfiles/
+          fi
           tar -czf evidence/unified-evidence-envelope-inputs.tgz -C evidence envelope-inputs
 
       - name: Upload unified evidence envelope inputs (release-controlled)
