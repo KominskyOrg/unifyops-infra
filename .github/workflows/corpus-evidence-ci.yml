@@ -7,6 +7,16 @@ on:
       - dev
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      UO_EVIDENCE_CORPUS_SOURCE_REPO:
+        description: 'Optional override for source repo (org/repo) used by corpus runner checkout.'
+        required: false
+        type: string
+      UO_EVIDENCE_CORPUS_SOURCE_REF:
+        description: 'Optional override for source ref (branch/tag/SHA) used by corpus runner checkout.'
+        required: false
+        type: string
 
 jobs:
   corpus-evidence:
@@ -28,8 +38,10 @@ jobs:
       EXPECTED_CORPUS_MANIFEST_SHA256: ${{ vars.EXPECTED_CORPUS_MANIFEST_SHA256 || '' }}
       UO_EVIDENCE_CORPUS_RUNNER_VERSION: "1.0.0"
       # Use source-of-truth runner code from unifyops repo to avoid drift in published packages.
-      UO_EVIDENCE_CORPUS_SOURCE_REPO: ${{ vars.UO_EVIDENCE_CORPUS_SOURCE_REPO || format('{0}/unifyops', github.repository_owner) }}
-      UO_EVIDENCE_CORPUS_SOURCE_REF: ${{ vars.UO_EVIDENCE_CORPUS_SOURCE_REF || github.head_ref || github.ref_name }}
+      UO_EVIDENCE_CORPUS_SOURCE_REPO: ${{ inputs.UO_EVIDENCE_CORPUS_SOURCE_REPO || vars.UO_EVIDENCE_CORPUS_SOURCE_REPO || format('{0}/unifyops', github.repository_owner) }}
+      UO_EVIDENCE_CORPUS_SOURCE_REF: ${{ inputs.UO_EVIDENCE_CORPUS_SOURCE_REF || vars.UO_EVIDENCE_CORPUS_SOURCE_REF || github.head_ref || github.ref_name }}
+      # Optional for cross-repo private checkout: set secret UO_EVIDENCE_SOURCE_TOKEN with read access.
+      UO_EVIDENCE_SOURCE_TOKEN: ${{ secrets.UO_EVIDENCE_SOURCE_TOKEN || '' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -39,14 +51,80 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Preflight source repo access/ref for corpus runner checkout
+        id: source_preflight
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          repo="${UO_EVIDENCE_CORPUS_SOURCE_REPO}"
+          ref="${UO_EVIDENCE_CORPUS_SOURCE_REF}"
+          token="${UO_EVIDENCE_SOURCE_TOKEN:-}"
+          remote="https://github.com/${repo}.git"
+          auth_remote="${remote}"
+          if [[ -n "${token}" ]]; then
+            auth_remote="https://x-access-token:${token}@github.com/${repo}.git"
+          fi
+
+          err_file="$(mktemp)"
+          set +e
+          git ls-remote --exit-code "${auth_remote}" "${ref}" > /dev/null 2>"${err_file}"
+          rc=$?
+          set -e
+          err_text="$(cat "${err_file}")"
+          rm -f "${err_file}"
+
+          preflight_ok="false"
+          error_type=""
+          error_message=""
+
+          if [[ ${rc} -eq 0 ]]; then
+            preflight_ok="true"
+          elif [[ ${rc} -eq 2 ]]; then
+            error_type="ref_missing"
+            error_message="Configured ref '${ref}' was not found in source repo '${repo}'."
+          elif grep -qiE 'Authentication failed|could not read Username|access denied|HTTP Basic: Access denied|403' <<<"${err_text}"; then
+            error_type="auth_denied"
+            error_message="Authentication denied for source repo '${repo}'. Verify UO_EVIDENCE_SOURCE_TOKEN read access."
+          elif grep -qi 'Repository not found' <<<"${err_text}"; then
+            if [[ -n "${token}" ]]; then
+              error_type="repo_not_found"
+              error_message="Source repo '${repo}' was not found. Verify UO_EVIDENCE_CORPUS_SOURCE_REPO value."
+            else
+              error_type="auth_denied"
+              error_message="Source repo '${repo}' is inaccessible without credentials (repo may be private or missing). Set UO_EVIDENCE_SOURCE_TOKEN with read access."
+            fi
+          else
+            error_type="checkout_preflight_failed"
+            compact_err="$(printf '%s' "${err_text}" | head -n 1)"
+            error_message="Unable to validate source repo/ref ('${repo}' @ '${ref}'): ${compact_err}"
+          fi
+
+          echo "preflight_ok=${preflight_ok}" >> "$GITHUB_OUTPUT"
+          echo "error_type=${error_type}" >> "$GITHUB_OUTPUT"
+          echo "error_message=${error_message}" >> "$GITHUB_OUTPUT"
+
+          if [[ "${preflight_ok}" == "true" ]]; then
+            echo "Source preflight passed for ${repo}@${ref}."
+          else
+            echo "::warning::Source preflight failed (${error_type}): ${error_message}"
+            exit 1
+          fi
+
       - name: Checkout unifyops source for corpus runner
+        id: source_checkout
+        if: always() && steps.source_preflight.outputs.preflight_ok == 'true'
+        continue-on-error: true
         uses: actions/checkout@v4
         with:
           repository: ${{ env.UO_EVIDENCE_CORPUS_SOURCE_REPO }}
           ref: ${{ env.UO_EVIDENCE_CORPUS_SOURCE_REF }}
           path: _deps/unifyops
+          token: ${{ env.UO_EVIDENCE_SOURCE_TOKEN != '' && env.UO_EVIDENCE_SOURCE_TOKEN || github.token }}
 
       - name: Install evidence corpus runner dependency (local source)
+        id: runner_install
+        if: always() && steps.source_preflight.outputs.preflight_ok == 'true' && steps.source_checkout.outcome == 'success'
+        continue-on-error: true
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
@@ -59,6 +137,7 @@ jobs:
 
       - name: Run evidence corpus runner (local source)
         id: corpus_runner
+        if: always() && steps.source_preflight.outputs.preflight_ok == 'true' && steps.source_checkout.outcome == 'success' && steps.runner_install.outcome == 'success'
         continue-on-error: true
         run: |
           set -euo pipefail
@@ -72,17 +151,33 @@ jobs:
       - name: Enforce runner/matrix gate semantics
         if: always()
         env:
+          PRECHECK_OUTCOME: ${{ steps.source_preflight.outcome }}
+          PRECHECK_OK: ${{ steps.source_preflight.outputs.preflight_ok }}
+          PRECHECK_ERROR_TYPE: ${{ steps.source_preflight.outputs.error_type }}
+          PRECHECK_ERROR_MESSAGE: ${{ steps.source_preflight.outputs.error_message }}
+          SOURCE_CHECKOUT_OUTCOME: ${{ steps.source_checkout.outcome }}
+          RUNNER_INSTALL_OUTCOME: ${{ steps.runner_install.outcome }}
           RUNNER_OUTCOME: ${{ steps.corpus_runner.outcome }}
         run: |
           set -euo pipefail
           non_blocking="${EVIDENCE_CORPUS_NON_BLOCKING,,}"
-          runner_outcome="${RUNNER_OUTCOME:-unknown}"
+          prereq_error=""
 
-          if [[ "${runner_outcome}" != "success" ]]; then
+          if [[ "${PRECHECK_OK:-false}" != "true" ]]; then
+            prereq_error="source checkout preflight failed (${PRECHECK_ERROR_TYPE:-unknown}): ${PRECHECK_ERROR_MESSAGE:-preflight did not succeed}"
+          elif [[ "${SOURCE_CHECKOUT_OUTCOME:-skipped}" != "success" ]]; then
+            prereq_error="source checkout step failed (outcome=${SOURCE_CHECKOUT_OUTCOME:-unknown})."
+          elif [[ "${RUNNER_INSTALL_OUTCOME:-skipped}" != "success" ]]; then
+            prereq_error="runner dependency install step failed (outcome=${RUNNER_INSTALL_OUTCOME:-unknown})."
+          elif [[ "${RUNNER_OUTCOME:-skipped}" != "success" ]]; then
+            prereq_error="corpus runner execution failed (outcome=${RUNNER_OUTCOME:-unknown})."
+          fi
+
+          if [[ -n "${prereq_error}" ]]; then
             if [[ "${non_blocking}" == "true" ]]; then
-              echo "::warning::[NON-BLOCKING EVIDENCE CORPUS] corpus runner failed (outcome=${runner_outcome}); downstream validation is skipped."
+              echo "::warning::[NON-BLOCKING EVIDENCE CORPUS] ${prereq_error} Downstream validation is skipped."
             else
-              echo "::error::Evidence corpus gate failed: corpus runner execution failed (outcome=${runner_outcome})."
+              echo "::error::Evidence corpus gate failed: ${prereq_error}"
               exit 1
             fi
           fi
@@ -145,24 +240,38 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
-          lockfiles=(poetry.lock requirements*.txt)
-          if (( ${#lockfiles[@]} == 0 )); then
-            echo "::warning::No lockfile evidence present (poetry.lock/requirements*.txt not found)."
+          lockfiles=(poetry.lock requirements*.txt _deps/unifyops/poetry.lock _deps/unifyops/requirements*.txt)
+          IFS=$'\n' lockfiles=($(printf '%s\n' "${lockfiles[@]}" | sort -u))
+          unset IFS
+
+          valid_lockfiles=()
+          for lf in "${lockfiles[@]}"; do
+            if [[ -f "${lf}" ]]; then
+              valid_lockfiles+=("${lf}")
+            fi
+          done
+
+          if (( ${#valid_lockfiles[@]} == 0 )); then
+            echo "::warning::No lockfile evidence present (poetry.lock/requirements*.txt not found in repo root or _deps/unifyops)."
             echo "lockfile_path=" >> "$GITHUB_OUTPUT"
             echo "lockfile_sha256=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          IFS=$'\n' lockfiles=($(printf '%s\n' "${lockfiles[@]}" | sort -u))
-          unset IFS
-          primary="${lockfiles[0]}"
+
+          primary="${valid_lockfiles[0]}"
           primary_sha="$(sha256sum "${primary}" | awk '{print $1}')"
           echo "lockfile_path=${primary}" >> "$GITHUB_OUTPUT"
           echo "lockfile_sha256=${primary_sha}" >> "$GITHUB_OUTPUT"
           echo "lockfile_path=${primary}"
           echo "lockfile_sha256=${primary_sha}"
-          for lf in "${lockfiles[@]}"; do
-            sha="$(sha256sum "${lf}" | awk '{print $1}')"
-            echo "lockfile_sha256[${lf}]=${sha}"
+
+          for lf in "${valid_lockfiles[@]}"; do
+            if [[ -f "${lf}" ]]; then
+              sha="$(sha256sum "${lf}" | awk '{print $1}')"
+              echo "lockfile_sha256[${lf}]=${sha}"
+            else
+              echo "::warning::Lockfile disappeared before digesting: ${lf}"
+            fi
           done
 
       - name: Build corpus artifacts integrity metadata
@@ -247,6 +356,8 @@ jobs:
           path: |
             poetry.lock
             requirements*.txt
+            _deps/unifyops/poetry.lock
+            _deps/unifyops/requirements*.txt
 
       - name: Build unified evidence envelope inputs (release-controlled)
         if: always() && env.RELEASE_CONTROLLED_LANE == 'true' && hashFiles('evidence/validator/test-output/corpus-matrix-report-v1.json') != ''
