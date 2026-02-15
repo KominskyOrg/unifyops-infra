@@ -31,23 +31,60 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Python for corpus runner
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install evidence corpus runner dependency (pinned)
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install "unifyops-core==${UO_EVIDENCE_CORPUS_RUNNER_VERSION}"
+
       - name: Ensure corpus output directories exist
         run: mkdir -p "${CORPUS_OUTPUT_DIR}" "${CORPUS_REPORTS_DIR}"
 
       - name: Run evidence corpus runner (pinned)
         id: corpus_runner
+        continue-on-error: true
         run: |
           set -euo pipefail
-          uo-evidence-corpus-runner \
+          python -m unifyops_core.evidence.validator.tools.corpus_runner \
             --runner-version "${UO_EVIDENCE_CORPUS_RUNNER_VERSION}" \
             --corpus-root "${CORPUS_ROOT}" \
             --matrix-out "${CORPUS_MATRIX}" \
             --reports-dir "${CORPUS_REPORTS_DIR}" \
             --summary-md-out "${CORPUS_SUMMARY}"
 
+      - name: Enforce runner/matrix gate semantics
+        if: always()
+        run: |
+          set -euo pipefail
+          non_blocking="${EVIDENCE_CORPUS_NON_BLOCKING,,}"
+          runner_outcome="${{ steps.corpus_runner.outcome }}"
+
+          if [[ "${runner_outcome}" != "success" ]]; then
+            if [[ "${non_blocking}" == "true" ]]; then
+              echo "::warning::[NON-BLOCKING EVIDENCE CORPUS] corpus runner failed (outcome=${runner_outcome}); downstream validation is skipped."
+            else
+              echo "::error::Evidence corpus gate failed: corpus runner execution failed (outcome=${runner_outcome})."
+              exit 1
+            fi
+          fi
+
+          if [[ ! -s "${CORPUS_MATRIX}" ]]; then
+            if [[ "${non_blocking}" == "true" ]]; then
+              echo "::warning::[NON-BLOCKING EVIDENCE CORPUS] matrix artifact missing at ${CORPUS_MATRIX}; digest/lineage/policy validation is skipped."
+            else
+              echo "::error::Evidence corpus gate failed: required matrix artifact missing at ${CORPUS_MATRIX}."
+              exit 1
+            fi
+          fi
+
       - name: Emit corpus matrix SHA-256
         id: matrix_digest
-        if: always()
+        if: always() && hashFiles('evidence/validator/test-output/corpus-matrix-report-v1.json') != ''
         run: |
           set -euo pipefail
           digest="$(sha256sum "${CORPUS_MATRIX}" | awk '{print $1}')"
@@ -56,7 +93,7 @@ jobs:
 
       - name: Extract required lineage outputs
         id: lineage
-        if: always()
+        if: always() && hashFiles('evidence/validator/test-output/corpus-matrix-report-v1.json') != ''
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -81,7 +118,7 @@ jobs:
           PY
 
       - name: Validate corpus matrix policy gate
-        if: always()
+        if: always() && hashFiles('evidence/validator/test-output/corpus-matrix-report-v1.json') != ''
         run: |
           set -euo pipefail
           args=(
@@ -107,6 +144,7 @@ jobs:
         if: always()
         with:
           name: corpus-matrix-report-v1
+          if-no-files-found: warn
           path: ${{ env.CORPUS_MATRIX }}
 
       - name: Upload corpus summary artifact
@@ -114,6 +152,7 @@ jobs:
         if: always()
         with:
           name: corpus-summary-md
+          if-no-files-found: warn
           path: ${{ env.CORPUS_SUMMARY }}
 
       - name: Upload per-case corpus reports
@@ -121,6 +160,7 @@ jobs:
         if: always()
         with:
           name: corpus-case-reports
+          if-no-files-found: warn
           path: ${{ env.CORPUS_REPORTS_DIR }}/**
 
       - name: Upload runner lockfile evidence (if present)
@@ -134,7 +174,7 @@ jobs:
             requirements*.txt
 
       - name: Build unified evidence envelope inputs (release-controlled)
-        if: always() && env.RELEASE_CONTROLLED_LANE == 'true'
+        if: always() && env.RELEASE_CONTROLLED_LANE == 'true' && hashFiles('evidence/validator/test-output/corpus-matrix-report-v1.json') != ''
         run: |
           set -euo pipefail
           mkdir -p evidence/envelope-inputs
@@ -148,4 +188,5 @@ jobs:
         if: always() && env.RELEASE_CONTROLLED_LANE == 'true'
         with:
           name: unified-evidence-envelope-inputs
+          if-no-files-found: warn
           path: evidence/unified-evidence-envelope-inputs.tgz
