@@ -34,6 +34,7 @@ jobs:
       REASON_CODES_INDEX_JSON: evidence/validator/test-output/reason-codes-index-v1.json
       POLICY_DRIFT_OUTCOME_JSON: evidence/validator/test-output/policy-drift-outcome-v1.json
       ENVELOPE_COHESION_OUTCOME_JSON: evidence/validator/test-output/envelope-cohesion-outcome-v1.json
+      DETERMINISM_OUTCOME_JSON: evidence/validator/test-output/determinism-outcome-v1.json
       # Release-controlled lanes: tag pipelines by default.
       RELEASE_CONTROLLED_LANE: ${{ startsWith(github.ref, 'refs/tags/') && 'true' || 'false' }}
       # Temporary rollout toggle (disabled by default).
@@ -1388,6 +1389,96 @@ jobs:
               raise SystemExit(1)
           PY
 
+
+      - name: Validate deterministic replay-proof governance digests
+        if: always()
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          release_lane = os.environ.get('RELEASE_CONTROLLED_LANE', '').strip().lower() == 'true'
+          lane = 'release' if release_lane else 'non-release'
+
+          targets = [
+              ('policy_outcome', Path(os.environ['POLICY_OUTCOME_JSON'])),
+              ('artifact_manifest', Path(os.environ['ARTIFACT_MANIFEST_JSON'])),
+              ('artifact_linkage_outcome', Path(os.environ['ARTIFACT_LINKAGE_OUTCOME_JSON'])),
+              ('reason_codes_index', Path(os.environ['REASON_CODES_INDEX_JSON'])),
+              ('policy_drift_outcome', Path(os.environ['POLICY_DRIFT_OUTCOME_JSON'])),
+              ('envelope_cohesion_outcome', Path(os.environ['ENVELOPE_COHESION_OUTCOME_JSON'])),
+          ]
+          out_path = Path(os.environ['DETERMINISM_OUTCOME_JSON'])
+          out_path.parent.mkdir(parents=True, exist_ok=True)
+
+          reasons = []
+
+          def add_reason(code: str, message: str) -> None:
+              reasons.append({'code': code, 'message': message})
+
+          def canonical_sha(path: Path) -> str:
+              payload = json.loads(path.read_text(encoding='utf-8'))
+              canonical = json.dumps(payload, sort_keys=True, separators=(',', ':'), ensure_ascii=False)
+              return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
+
+          first_pass = {}
+          second_pass = {}
+
+          for name, path in targets:
+              if not path.is_file():
+                  add_reason('CMX_DETERMINISM_ARTIFACT_MISSING', f'missing required governance artifact for determinism check: {name} -> {path.as_posix()}')
+                  continue
+              try:
+                  first_pass[name] = canonical_sha(path)
+              except Exception as exc:
+                  add_reason('CMX_DETERMINISM_ARTIFACT_INVALID', f'failed canonical digest on first pass for {name} ({path.as_posix()}): {exc}')
+
+          for name, path in targets:
+              if name not in first_pass:
+                  continue
+              try:
+                  second_pass[name] = canonical_sha(path)
+              except Exception as exc:
+                  add_reason('CMX_DETERMINISM_ARTIFACT_INVALID', f'failed canonical digest on second pass for {name} ({path.as_posix()}): {exc}')
+                  continue
+
+              if first_pass[name] != second_pass[name]:
+                  add_reason(
+                      'CMX_DETERMINISM_DIGEST_MISMATCH',
+                      f'determinism digest mismatch within same run for {name}: pass1={first_pass[name]} pass2={second_pass[name]}',
+                  )
+
+          reasons = sorted(reasons, key=lambda r: (r.get('code', ''), r.get('message', '')))
+          gate_result = 'pass' if not reasons else ('fail' if release_lane else 'warn')
+
+          for reason in reasons:
+              if release_lane:
+                  print(f"::error::[POLICY][RELEASE][{reason['code']}] {reason['message']}")
+              else:
+                  print(f"::warning::[POLICY][NON-RELEASE][{reason['code']}] {reason['message']}")
+
+          payload = {
+              'schema_version': 'determinism-outcome-v1',
+              'lane': lane,
+              'gate_result': gate_result,
+              'reasons': reasons,
+              'source_artifacts': {name: path.as_posix() for name, path in targets},
+              'digest_replay': {
+                  'pass1': {k: first_pass[k] for k in sorted(first_pass)},
+                  'pass2': {k: second_pass[k] for k in sorted(second_pass)},
+              },
+          }
+
+          out_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          print(f'wrote determinism outcome: {out_path}')
+
+          if release_lane and reasons:
+              raise SystemExit(1)
+          PY
+
       - name: Upload corpus matrix artifact
         uses: actions/upload-artifact@v4
         if: always()
@@ -1403,6 +1494,7 @@ jobs:
             ${{ env.REASON_CODES_INDEX_JSON }}
             ${{ env.POLICY_DRIFT_OUTCOME_JSON }}
             ${{ env.ENVELOPE_COHESION_OUTCOME_JSON }}
+            ${{ env.DETERMINISM_OUTCOME_JSON }}
 
       - name: Upload corpus summary artifact
         uses: actions/upload-artifact@v4
@@ -1457,6 +1549,9 @@ jobs:
           fi
           if [[ -f "${ENVELOPE_COHESION_OUTCOME_JSON}" ]]; then
             cp "${ENVELOPE_COHESION_OUTCOME_JSON}" evidence/envelope-inputs/
+          fi
+          if [[ -f "${DETERMINISM_OUTCOME_JSON}" ]]; then
+            cp "${DETERMINISM_OUTCOME_JSON}" evidence/envelope-inputs/
           fi
           if [[ -n "${{ steps.lockfile_digest.outputs.lockfile_path }}" && -f "${{ steps.lockfile_digest.outputs.lockfile_path }}" ]]; then
             mkdir -p evidence/envelope-inputs/lockfiles

@@ -159,3 +159,22 @@ INF-2 (gate parser + completeness checks):
   - release lanes: envelope-cohesion mismatch hard-fails (`gate_result=fail`, step exits non-zero)
   - non-release lanes: warning-only posture (`gate_result=warn`) with no pass/fail tightening.
 - `envelope-cohesion-outcome-v1.json` is uploaded with corpus artifacts and included in release-lane unified evidence envelope inputs when present.
+
+## Rollout slice update (2026-02-16, Mode A Phase-1 replay-determinism self-check)
+- Added deterministic replay-proof self-check step that canonicalizes and re-hashes governance artifacts twice within the same run and compares digest stability for:
+  - `policy-outcome-v1.json`
+  - `artifact-manifest-v1.json`
+  - `artifact-linkage-outcome-v1.json`
+  - `reason-codes-index-v1.json`
+  - `policy-drift-outcome-v1.json`
+  - `envelope-cohesion-outcome-v1.json`
+- New deterministic artifact: `evidence/validator/test-output/determinism-outcome-v1.json` with contract fields:
+  - `schema_version`, `lane`, `gate_result`, `reasons[]`, `source_artifacts`, `digest_replay.pass1`, `digest_replay.pass2`
+- Determinism reason-code contract (`CMX_DETERMINISM_*`):
+  - `CMX_DETERMINISM_ARTIFACT_MISSING` (required governance artifact absent)
+  - `CMX_DETERMINISM_ARTIFACT_INVALID` (artifact parse/canonicalization failure)
+  - `CMX_DETERMINISM_DIGEST_MISMATCH` (pass-1 vs pass-2 canonical digest mismatch in same run)
+- Lane behavior preserved per Mode A semantics:
+  - release lanes: any determinism reason is hard-fail (`gate_result=fail`, step exits non-zero)
+  - non-release lanes: warning-only posture (`gate_result=warn`) with no gate tightening
+- `determinism-outcome-v1.json` is uploaded with corpus artifacts and included in release-lane unified evidence envelope inputs when present.
