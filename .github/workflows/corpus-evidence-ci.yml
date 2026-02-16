@@ -33,6 +33,7 @@ jobs:
       ARTIFACT_LINKAGE_OUTCOME_JSON: evidence/validator/test-output/artifact-linkage-outcome-v1.json
       REASON_CODES_INDEX_JSON: evidence/validator/test-output/reason-codes-index-v1.json
       POLICY_DRIFT_OUTCOME_JSON: evidence/validator/test-output/policy-drift-outcome-v1.json
+      ENVELOPE_COHESION_OUTCOME_JSON: evidence/validator/test-output/envelope-cohesion-outcome-v1.json
       # Release-controlled lanes: tag pipelines by default.
       RELEASE_CONTROLLED_LANE: ${{ startsWith(github.ref, 'refs/tags/') && 'true' || 'false' }}
       # Temporary rollout toggle (disabled by default).
@@ -1273,6 +1274,120 @@ jobs:
           if release_lane and reasons:
               raise SystemExit(1)
           PY
+
+      - name: Validate evidence envelope cohesion
+        if: always()
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          release_lane = os.environ.get('RELEASE_CONTROLLED_LANE', '').strip().lower() == 'true'
+          lane = 'release' if release_lane else 'non-release'
+
+          output_path = Path(os.environ['ENVELOPE_COHESION_OUTCOME_JSON'])
+          output_path.parent.mkdir(parents=True, exist_ok=True)
+
+          governance_artifacts = {
+              'matrix': Path(os.environ['CORPUS_MATRIX']),
+              'metadata': Path(os.environ['CORPUS_OUTPUT_DIR']) / 'corpus-artifacts-metadata.json',
+              'manifest': Path(os.environ['ARTIFACT_MANIFEST_JSON']),
+              'policy_outcome': Path(os.environ['POLICY_OUTCOME_JSON']),
+              'artifact_linkage_outcome': Path(os.environ['ARTIFACT_LINKAGE_OUTCOME_JSON']),
+              'reason_codes_index': Path(os.environ['REASON_CODES_INDEX_JSON']),
+              'policy_drift_outcome': Path(os.environ['POLICY_DRIFT_OUTCOME_JSON']),
+          }
+
+          envelope_mapping = {
+              'matrix': 'evidence/envelope-inputs/corpus-matrix-report-v1.json',
+              'metadata': 'evidence/envelope-inputs/integrity-metadata.json',
+              'manifest': 'evidence/envelope-inputs/artifact-manifest-v1.json',
+              'policy_outcome': 'evidence/envelope-inputs/policy-outcome-v1.json',
+              'artifact_linkage_outcome': 'evidence/envelope-inputs/artifact-linkage-outcome-v1.json',
+              'reason_codes_index': 'evidence/envelope-inputs/reason-codes-index-v1.json',
+              'policy_drift_outcome': 'evidence/envelope-inputs/policy-drift-outcome-v1.json',
+          }
+
+          reasons = []
+
+          def add_reason(code: str, message: str) -> None:
+              reasons.append({'code': code, 'message': message})
+
+          produced = {name: path for name, path in governance_artifacts.items() if path.is_file()}
+          missing = {name: path for name, path in governance_artifacts.items() if not path.is_file()}
+
+          for name, path in sorted(missing.items()):
+              add_reason(
+                  'CMX_ENVELOPE_ARTIFACT_MISSING',
+                  f"governance artifact missing for envelope cohesion: {name} -> {path.as_posix()}",
+              )
+
+          # Planned envelope inputs mirror the release envelope builder logic (include artifact when present).
+          planned_inputs = {
+              name: target
+              for name, target in envelope_mapping.items()
+              if governance_artifacts[name].is_file()
+          }
+
+          for name in sorted(produced):
+              if name not in planned_inputs:
+                  add_reason(
+                      'CMX_ENVELOPE_INPUT_MISSING_FOR_ARTIFACT',
+                      f"produced governance artifact is not mapped into envelope inputs: {name}",
+                  )
+
+          for name in sorted(planned_inputs):
+              if name not in produced:
+                  add_reason(
+                      'CMX_ENVELOPE_INPUT_WITHOUT_ARTIFACT',
+                      f"envelope input mapping exists without emitted artifact: {name}",
+                  )
+
+          reasons = sorted(reasons, key=lambda r: (r.get('code', ''), r.get('message', '')))
+          gate_result = 'pass' if not reasons else ('fail' if release_lane else 'warn')
+
+          for reason in reasons:
+              code = reason['code']
+              message = reason['message']
+              if release_lane:
+                  print(f"::error::[POLICY][RELEASE][{code}] {message}")
+              else:
+                  print(f"::warning::[POLICY][NON-RELEASE][{code}] {message}")
+
+          payload = {
+              'schema_version': 'envelope-cohesion-outcome-v1',
+              'lane': lane,
+              'gate_result': gate_result,
+              'reasons': reasons,
+              'governance_artifacts': {
+                  name: {
+                      'path': governance_artifacts[name].as_posix(),
+                      'exists': governance_artifacts[name].is_file(),
+                      'envelope_input_path': envelope_mapping[name],
+                      'included_in_envelope_when_present': name in planned_inputs,
+                  }
+                  for name in sorted(governance_artifacts)
+              },
+              'source_artifacts': {
+                  'matrix': governance_artifacts['matrix'].as_posix(),
+                  'metadata': governance_artifacts['metadata'].as_posix(),
+                  'manifest': governance_artifacts['manifest'].as_posix(),
+                  'policy_outcome': governance_artifacts['policy_outcome'].as_posix(),
+                  'artifact_linkage_outcome': governance_artifacts['artifact_linkage_outcome'].as_posix(),
+                  'reason_codes_index': governance_artifacts['reason_codes_index'].as_posix(),
+                  'policy_drift_outcome': governance_artifacts['policy_drift_outcome'].as_posix(),
+              },
+          }
+
+          output_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + '\\n', encoding='utf-8')
+          print(f'wrote envelope cohesion outcome: {output_path}')
+
+          if release_lane and reasons:
+              raise SystemExit(1)
+          PY
+
       - name: Upload corpus matrix artifact
         uses: actions/upload-artifact@v4
         if: always()
@@ -1287,6 +1402,7 @@ jobs:
             ${{ env.ARTIFACT_LINKAGE_OUTCOME_JSON }}
             ${{ env.REASON_CODES_INDEX_JSON }}
             ${{ env.POLICY_DRIFT_OUTCOME_JSON }}
+            ${{ env.ENVELOPE_COHESION_OUTCOME_JSON }}
 
       - name: Upload corpus summary artifact
         uses: actions/upload-artifact@v4
@@ -1338,6 +1454,9 @@ jobs:
           fi
           if [[ -f "${POLICY_DRIFT_OUTCOME_JSON}" ]]; then
             cp "${POLICY_DRIFT_OUTCOME_JSON}" evidence/envelope-inputs/
+          fi
+          if [[ -f "${ENVELOPE_COHESION_OUTCOME_JSON}" ]]; then
+            cp "${ENVELOPE_COHESION_OUTCOME_JSON}" evidence/envelope-inputs/
           fi
           if [[ -n "${{ steps.lockfile_digest.outputs.lockfile_path }}" && -f "${{ steps.lockfile_digest.outputs.lockfile_path }}" ]]; then
             mkdir -p evidence/envelope-inputs/lockfiles

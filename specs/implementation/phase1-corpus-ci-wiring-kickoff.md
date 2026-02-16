@@ -146,3 +146,16 @@ INF-2 (gate parser + completeness checks):
   - release lanes: any drift reason triggers hard-fail (`gate_result=fail`, step exits non-zero)
   - non-release lanes: drift emits warning-only diagnostics (`gate_result=warn`) and preserves rollout posture
 - Drift artifact is now uploaded with corpus artifacts and included in release-lane unified evidence envelope inputs when present.
+
+## Rollout slice update (2026-02-16, Mode A Phase-1 envelope-cohesion contract)
+- Added deterministic evidence-envelope cohesion validation step that reconciles release envelope input mapping against emitted governance artifacts (`matrix`, `metadata`, `artifact-manifest`, `policy-outcome`, `artifact-linkage-outcome`, `reason-codes-index`, `policy-drift-outcome`).
+- New deterministic artifact: `evidence/validator/test-output/envelope-cohesion-outcome-v1.json`.
+- Artifact contract (v1): `schema_version`, `lane`, `gate_result`, `reasons[]`, `governance_artifacts` (path/existence/envelope mapping), and `source_artifacts` path index.
+- Deterministic coded outcomes (`CMX_ENVELOPE_*`):
+  - `CMX_ENVELOPE_ARTIFACT_MISSING`
+  - `CMX_ENVELOPE_INPUT_MISSING_FOR_ARTIFACT`
+  - `CMX_ENVELOPE_INPUT_WITHOUT_ARTIFACT`
+- Lane semantics:
+  - release lanes: envelope-cohesion mismatch hard-fails (`gate_result=fail`, step exits non-zero)
+  - non-release lanes: warning-only posture (`gate_result=warn`) with no pass/fail tightening.
+- `envelope-cohesion-outcome-v1.json` is uploaded with corpus artifacts and included in release-lane unified evidence envelope inputs when present.
