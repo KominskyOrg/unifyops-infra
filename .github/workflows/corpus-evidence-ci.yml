@@ -30,6 +30,7 @@ jobs:
       CORPUS_REPORTS_DIR: evidence/validator/test-output/corpus-reports
       POLICY_OUTCOME_JSON: evidence/validator/test-output/policy-outcome-v1.json
       ARTIFACT_MANIFEST_JSON: evidence/validator/test-output/artifact-manifest-v1.json
+      ARTIFACT_LINKAGE_OUTCOME_JSON: evidence/validator/test-output/artifact-linkage-outcome-v1.json
       # Release-controlled lanes: tag pipelines by default.
       RELEASE_CONTROLLED_LANE: ${{ startsWith(github.ref, 'refs/tags/') && 'true' || 'false' }}
       # Temporary rollout toggle (disabled by default).
@@ -657,6 +658,8 @@ jobs:
               'lockfile_sha256': '${{ steps.lockfile_digest.outputs.lockfile_sha256 }}',
               'source_manifest_path': '${{ steps.lockfile_digest.outputs.source_manifest_path }}',
               'source_manifest_sha256': '${{ steps.lockfile_digest.outputs.source_manifest_sha256 }}',
+              'policy_outcome_path': os.environ.get('POLICY_OUTCOME_JSON', ''),
+              'artifact_manifest_path': os.environ.get('ARTIFACT_MANIFEST_JSON', ''),
           }
           out.write_text(json.dumps(data, indent=2, sort_keys=True) + '\n', encoding='utf-8')
           print(f'wrote metadata: {out}')
@@ -819,6 +822,108 @@ jobs:
               for role in missing:
                   print(f'::warning::[POLICY][NON-RELEASE] required artifact role missing from manifest (warning-only in non-release lane): {role}')
           PY
+
+      - name: Validate cross-artifact linkage integrity
+        if: always()
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          release_lane = os.environ.get('RELEASE_CONTROLLED_LANE', '').strip().lower() == 'true'
+          matrix_path = Path(os.environ['CORPUS_MATRIX'])
+          policy_path = Path(os.environ['POLICY_OUTCOME_JSON'])
+          metadata_path = Path(os.environ['CORPUS_OUTPUT_DIR']) / 'corpus-artifacts-metadata.json'
+          manifest_path = Path(os.environ['ARTIFACT_MANIFEST_JSON'])
+          outcome_path = Path(os.environ['ARTIFACT_LINKAGE_OUTCOME_JSON'])
+
+          reasons = []
+
+          def add_reason(code: str, message: str) -> None:
+              reasons.append({'code': code, 'message': message})
+
+          metadata = {}
+          if metadata_path.is_file():
+              metadata = json.loads(metadata_path.read_text(encoding='utf-8'))
+          else:
+              add_reason('CMX_LINKAGE_METADATA_MISSING', f'metadata artifact missing: {metadata_path.as_posix()}')
+
+          if metadata:
+              expected_refs = {
+                  'corpus_matrix_path': matrix_path.as_posix(),
+                  'policy_outcome_path': policy_path.as_posix(),
+                  'artifact_manifest_path': manifest_path.as_posix(),
+              }
+              for key, expected in expected_refs.items():
+                  actual = str(metadata.get(key, '')).strip()
+                  if actual != expected:
+                      add_reason(
+                          'CMX_LINKAGE_METADATA_REF_MISMATCH',
+                          f'metadata.{key} mismatch: expected={expected} actual={actual or "<empty>"}',
+                      )
+
+          manifest_entries = {}
+          if manifest_path.is_file():
+              payload = json.loads(manifest_path.read_text(encoding='utf-8'))
+              for entry in payload.get('entries', []):
+                  p = str(entry.get('path', '')).strip()
+                  if p:
+                      manifest_entries[p] = str(entry.get('sha256', '')).strip().lower()
+          else:
+              add_reason('CMX_LINKAGE_MANIFEST_MISSING', f'artifact manifest missing: {manifest_path.as_posix()}')
+
+          required_files = [
+              ('matrix', matrix_path),
+              ('summary', Path(os.environ['CORPUS_SUMMARY'])),
+              ('policy_outcome', policy_path),
+              ('metadata', metadata_path),
+          ]
+
+          reports_dir = Path(os.environ['CORPUS_REPORTS_DIR'])
+          if reports_dir.is_dir():
+              for report_path in sorted([p for p in reports_dir.rglob('*') if p.is_file()], key=lambda p: p.as_posix()):
+                  required_files.append(('case_reports', report_path))
+
+          for role, file_path in required_files:
+              if not file_path.is_file():
+                  continue
+              key = file_path.as_posix()
+              actual_sha = hashlib.sha256(file_path.read_bytes()).hexdigest()
+              manifest_sha = manifest_entries.get(key, '')
+              if not manifest_sha:
+                  add_reason('CMX_LINKAGE_MANIFEST_ENTRY_MISSING', f'manifest entry missing for emitted {role} artifact: {key}')
+              elif manifest_sha.lower() != actual_sha.lower():
+                  add_reason(
+                      'CMX_LINKAGE_MANIFEST_SHA_MISMATCH',
+                      f'manifest sha mismatch for {key}: expected={actual_sha.lower()} actual={manifest_sha.lower()}',
+                  )
+
+          reasons = sorted(reasons, key=lambda r: (r.get('code', ''), r.get('message', '')))
+          gate_result = 'pass' if not reasons else ('fail' if release_lane else 'warn')
+
+          for reason in reasons:
+              code = reason['code']
+              message = reason['message']
+              if release_lane:
+                  print(f"::error::[POLICY][RELEASE][{code}] {message}")
+              else:
+                  print(f"::warning::[POLICY][NON-RELEASE][{code}] {message}")
+
+          outcome = {
+              'schema_version': 'artifact-linkage-outcome-v1',
+              'lane': 'release' if release_lane else 'non-release',
+              'gate_result': gate_result,
+              'reasons': reasons,
+          }
+          outcome_path.write_text(json.dumps(outcome, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          print(f'wrote artifact linkage outcome: {outcome_path}')
+
+          if release_lane and reasons:
+              raise SystemExit(1)
+          PY
       - name: Upload corpus matrix artifact
         uses: actions/upload-artifact@v4
         if: always()
@@ -830,6 +935,7 @@ jobs:
             ${{ env.CORPUS_OUTPUT_DIR }}/corpus-artifacts-metadata.json
             ${{ env.POLICY_OUTCOME_JSON }}
             ${{ env.ARTIFACT_MANIFEST_JSON }}
+            ${{ env.ARTIFACT_LINKAGE_OUTCOME_JSON }}
 
       - name: Upload corpus summary artifact
         uses: actions/upload-artifact@v4
@@ -872,6 +978,9 @@ jobs:
           fi
           if [[ -f "${ARTIFACT_MANIFEST_JSON}" ]]; then
             cp "${ARTIFACT_MANIFEST_JSON}" evidence/envelope-inputs/
+          fi
+          if [[ -f "${ARTIFACT_LINKAGE_OUTCOME_JSON}" ]]; then
+            cp "${ARTIFACT_LINKAGE_OUTCOME_JSON}" evidence/envelope-inputs/
           fi
           if [[ -n "${{ steps.lockfile_digest.outputs.lockfile_path }}" && -f "${{ steps.lockfile_digest.outputs.lockfile_path }}" ]]; then
             mkdir -p evidence/envelope-inputs/lockfiles

@@ -113,3 +113,10 @@ INF-2 (gate parser + completeness checks):
 - Manifest generation is order-stable by sorting case-report paths and globally sorting manifest entries by path before emission.
 - Added lane-aware artifact-role presence check keyed off the manifest: release-controlled lanes hard-fail only when required roles are missing, while non-release lanes emit warning-only diagnostics (existing non-release gate semantics preserved).
 - Artifact manifest is uploaded with corpus matrix artifacts and included in release-lane unified evidence envelope inputs when present.
+
+## Rollout slice update (2026-02-16, Mode A Phase-1 artifact-linkage integrity)
+- Added deterministic cross-artifact linkage validation step that compares metadata references against canonical workflow artifact paths for `corpus_matrix_path`, `policy_outcome_path`, and `artifact_manifest_path`.
+- Added deterministic linkage outcome artifact `evidence/validator/test-output/artifact-linkage-outcome-v1.json` (`schema_version`, `lane`, `gate_result`, `reasons[]`) and uploaded it with corpus artifacts; release lanes also include it in unified evidence envelope inputs.
+- Added coded linkage diagnostics with stable sort order `(code, message)` for deterministic logs/artifacts: `CMX_LINKAGE_METADATA_MISSING`, `CMX_LINKAGE_METADATA_REF_MISMATCH`, `CMX_LINKAGE_MANIFEST_MISSING`, `CMX_LINKAGE_MANIFEST_ENTRY_MISSING`, `CMX_LINKAGE_MANIFEST_SHA_MISMATCH`.
+- Linkage semantics by lane: release-controlled lanes treat any linkage reason as hard-fail (`gate_result=fail` + step exit non-zero), while non-release lanes emit warning-only diagnostics (`gate_result=warn`) and preserve non-blocking pass posture.
+- Metadata artifact now records explicit linkage references for downstream checks (`policy_outcome_path`, `artifact_manifest_path`) in addition to matrix/ref/lockfile fields.
