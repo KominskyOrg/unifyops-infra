@@ -96,6 +96,9 @@ def _write_outcome(path: str, payload: dict[str, Any]) -> None:
     out.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(f"policy.outcome_json={out}")
 
+def _sorted_reasons(reasons: list[dict[str, str]]) -> list[dict[str, str]]:
+    return sorted(reasons, key=lambda x: (x.get("code", ""), x.get("message", "")))
+
 
 def main() -> int:
     args = _parse_args()
@@ -227,6 +230,7 @@ def main() -> int:
             print(f"::warning::{w}")
             print(f"WARNING: {w}")
 
+    errors = _sorted_reasons(errors)
     gate_result = "fail" if errors else "pass"
     _write_outcome(
         args.policy_outcome_json,
