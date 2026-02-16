@@ -36,6 +36,7 @@ jobs:
       ENVELOPE_COHESION_OUTCOME_JSON: evidence/validator/test-output/envelope-cohesion-outcome-v1.json
       DETERMINISM_OUTCOME_JSON: evidence/validator/test-output/determinism-outcome-v1.json
       GOVERNANCE_SUMMARY_JSON: evidence/validator/test-output/governance-summary-v1.json
+      GOVERNANCE_TRENDS_JSON: evidence/validator/test-output/governance-trends-v1.json
       # Release-controlled lanes: tag pipelines by default.
       RELEASE_CONTROLLED_LANE: ${{ startsWith(github.ref, 'refs/tags/') && 'true' || 'false' }}
       # Temporary rollout toggle (disabled by default).
@@ -1617,6 +1618,82 @@ jobs:
           print(f'wrote governance summary: {out_path} verdict={verdict} artifacts={len(artifacts)} reasons={len(all_reasons)}')
           PY
 
+
+      - name: Build governance trends artifact
+        if: always()
+        env:
+          GH_RUN_ID: ${{ github.run_id }}
+          GH_RUN_ATTEMPT: ${{ github.run_attempt }}
+          GH_SHA: ${{ github.sha }}
+          GH_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import datetime as dt
+          import json
+          import os
+          from pathlib import Path
+
+          release_lane = os.environ.get('RELEASE_CONTROLLED_LANE', '').strip().lower() == 'true'
+          lane = 'release' if release_lane else 'non-release'
+          out_path = Path(os.environ['GOVERNANCE_TRENDS_JSON'])
+          out_path.parent.mkdir(parents=True, exist_ok=True)
+
+          # Collect reason counts by severity and code from governance summary
+          summary_path = Path(os.environ['GOVERNANCE_SUMMARY_JSON'])
+          verdict = 'unknown'
+          reason_counts_by_severity = {'error': 0, 'warning': 0, 'notice': 0}
+          reason_counts_by_code = {}
+
+          if summary_path.is_file():
+              try:
+                  summary = json.loads(summary_path.read_text(encoding='utf-8'))
+                  verdict = str(summary.get('verdict', 'unknown')).strip().lower()
+                  for reason in summary.get('reasons', []):
+                      if not isinstance(reason, dict):
+                          continue
+                      code = str(reason.get('code', '')).strip()
+                      source = str(reason.get('source', '')).strip()
+                      if not code:
+                          continue
+                      reason_counts_by_code[code] = reason_counts_by_code.get(code, 0) + 1
+              except Exception:
+                  pass
+
+          # Collect severity totals from reason codes index
+          reason_index_path = Path(os.environ['REASON_CODES_INDEX_JSON'])
+          if reason_index_path.is_file():
+              try:
+                  ri = json.loads(reason_index_path.read_text(encoding='utf-8'))
+                  totals = ri.get('severity_totals', {})
+                  if isinstance(totals, dict):
+                      for sev in ('error', 'warning', 'notice'):
+                          reason_counts_by_severity[sev] = int(totals.get(sev, 0))
+              except Exception:
+                  pass
+
+          run_record = {
+              'run_id': os.environ.get('GH_RUN_ID', ''),
+              'run_attempt': os.environ.get('GH_RUN_ATTEMPT', ''),
+              'commit_sha': os.environ.get('GH_SHA', ''),
+              'lane': lane,
+              'verdict': verdict,
+              'reason_counts_by_severity': reason_counts_by_severity,
+              'reason_counts_by_code': dict(sorted(reason_counts_by_code.items())),
+              'timestamp': dt.datetime.now(dt.timezone.utc).isoformat(),
+          }
+
+          payload = {
+              'schema_version': 'governance-trends-v1',
+              'mode': 'baseline',
+              'note': 'Historical context unavailable in runner; baseline record only.',
+              'runs': [run_record],
+          }
+
+          out_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          print(f'wrote governance trends: {out_path} mode=baseline')
+          PY
+
       - name: Upload corpus matrix artifact
         uses: actions/upload-artifact@v4
         if: always()
@@ -1634,6 +1711,7 @@ jobs:
             ${{ env.ENVELOPE_COHESION_OUTCOME_JSON }}
             ${{ env.DETERMINISM_OUTCOME_JSON }}
             ${{ env.GOVERNANCE_SUMMARY_JSON }}
+            ${{ env.GOVERNANCE_TRENDS_JSON }}
 
       - name: Upload corpus summary artifact
         uses: actions/upload-artifact@v4
@@ -1694,6 +1772,9 @@ jobs:
           fi
           if [[ -f "${GOVERNANCE_SUMMARY_JSON}" ]]; then
             cp "${GOVERNANCE_SUMMARY_JSON}" evidence/envelope-inputs/
+          fi
+          if [[ -f "${GOVERNANCE_TRENDS_JSON}" ]]; then
+            cp "${GOVERNANCE_TRENDS_JSON}" evidence/envelope-inputs/
           fi
           if [[ -n "${{ steps.lockfile_digest.outputs.lockfile_path }}" && -f "${{ steps.lockfile_digest.outputs.lockfile_path }}" ]]; then
             mkdir -p evidence/envelope-inputs/lockfiles
