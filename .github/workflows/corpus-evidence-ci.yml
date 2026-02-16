@@ -28,6 +28,7 @@ jobs:
       CORPUS_MATRIX: evidence/validator/test-output/corpus-matrix-report-v1.json
       CORPUS_SUMMARY: evidence/validator/test-output/corpus-summary.md
       CORPUS_REPORTS_DIR: evidence/validator/test-output/corpus-reports
+      POLICY_OUTCOME_JSON: evidence/validator/test-output/policy-outcome-v1.json
       # Release-controlled lanes: tag pipelines by default.
       RELEASE_CONTROLLED_LANE: ${{ startsWith(github.ref, 'refs/tags/') && 'true' || 'false' }}
       # Temporary rollout toggle (disabled by default).
@@ -491,6 +492,7 @@ jobs:
           done
 
       - name: Evaluate lane-specific corpus evidence posture
+        id: release_posture_policy
         if: always()
         env:
           PRECHECK_OK: ${{ steps.source_preflight.outputs.preflight_ok }}
@@ -513,15 +515,15 @@ jobs:
             failures=()
 
             if [[ "${PRECHECK_OK:-false}" != "true" ]]; then
-              failures+=("ref-integrity preflight failed (${PRECHECK_ERROR_TYPE:-unknown}): ${PRECHECK_ERROR_MESSAGE:-preflight did not succeed}")
+              failures+=("RLP_REF_PREFLIGHT_FAILED|ref-integrity preflight failed (${PRECHECK_ERROR_TYPE:-unknown}): ${PRECHECK_ERROR_MESSAGE:-preflight did not succeed}")
             elif [[ "${REF_MODE:-mutable}" != "immutable" ]]; then
-              failures+=("ref-integrity requires immutable source ref in release lane, got mode=${REF_MODE:-unset} ref='${EFFECTIVE_REF:-unset}'")
+              failures+=("RLP_REF_NOT_IMMUTABLE|ref-integrity requires immutable source ref in release lane, got mode=${REF_MODE:-unset} ref='${EFFECTIVE_REF:-unset}'")
             else
               echo "::notice::[POLICY][RELEASE] ref-integrity satisfied: ref='${EFFECTIVE_REF}' origin='${REF_ORIGIN}' mode='${REF_MODE}'"
             fi
 
             if [[ "${LOCKFILE_PRESENT:-false}" != "true" || -z "${LOCKFILE_PATH}" ]]; then
-              failures+=("lockfile evidence required in release lane; none found (searched: ${SEARCHED_LOCKFILE_PATHS:-unset})")
+              failures+=("RLP_LOCKFILE_REQUIRED|lockfile evidence required in release lane; none found (searched: ${SEARCHED_LOCKFILE_PATHS:-unset})")
               if [[ -n "${SOURCE_MANIFEST_PATH}" && -n "${SOURCE_MANIFEST_SHA256}" ]]; then
                 echo "::notice::[POLICY][RELEASE] supplemental manifest evidence present only: ${SOURCE_MANIFEST_PATH} (sha256=${SOURCE_MANIFEST_SHA256})"
               fi
@@ -530,8 +532,10 @@ jobs:
             fi
 
             if (( ${#failures[@]} > 0 )); then
-              for msg in "${failures[@]}"; do
-                echo "::error::[POLICY][RELEASE] ${msg}"
+              for item in "${failures[@]}"; do
+                code="${item%%|*}"
+                msg="${item#*|}"
+                echo "::error::[POLICY][RELEASE][${code}] ${msg}"
               done
               exit 1
             fi
@@ -611,15 +615,20 @@ jobs:
           PY
 
       - name: Validate corpus matrix policy gate
+        id: validate_matrix_policy
         if: always() && hashFiles('evidence/validator/test-output/corpus-matrix-report-v1.json') != ''
         run: |
           set -euo pipefail
           args=(
             --matrix "${CORPUS_MATRIX}"
+            --lane "${RELEASE_CONTROLLED_LANE}"
             --release-controlled "${RELEASE_CONTROLLED_LANE}"
             --non-blocking "${EVIDENCE_CORPUS_NON_BLOCKING}"
             --non-blocking-owner "${EVIDENCE_CORPUS_NON_BLOCKING_OWNER}"
             --non-blocking-expiry "${EVIDENCE_CORPUS_NON_BLOCKING_EXPIRY}"
+            --ref-mode "${{ steps.source_preflight.outputs.ref_mode }}"
+            --lockfile-present "${{ steps.lockfile_digest.outputs.lockfile_present }}"
+            --policy-outcome-json "${POLICY_OUTCOME_JSON}"
           )
 
           expected_count="${EXPECTED_CORPUS_CASE_COUNT}"
@@ -658,6 +667,7 @@ jobs:
           path: |
             ${{ env.CORPUS_MATRIX }}
             ${{ env.CORPUS_OUTPUT_DIR }}/corpus-artifacts-metadata.json
+            ${{ env.POLICY_OUTCOME_JSON }}
 
       - name: Upload corpus summary artifact
         uses: actions/upload-artifact@v4
