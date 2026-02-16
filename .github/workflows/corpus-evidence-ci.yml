@@ -35,6 +35,7 @@ jobs:
       POLICY_DRIFT_OUTCOME_JSON: evidence/validator/test-output/policy-drift-outcome-v1.json
       ENVELOPE_COHESION_OUTCOME_JSON: evidence/validator/test-output/envelope-cohesion-outcome-v1.json
       DETERMINISM_OUTCOME_JSON: evidence/validator/test-output/determinism-outcome-v1.json
+      GOVERNANCE_SUMMARY_JSON: evidence/validator/test-output/governance-summary-v1.json
       # Release-controlled lanes: tag pipelines by default.
       RELEASE_CONTROLLED_LANE: ${{ startsWith(github.ref, 'refs/tags/') && 'true' || 'false' }}
       # Temporary rollout toggle (disabled by default).
@@ -1479,6 +1480,143 @@ jobs:
               raise SystemExit(1)
           PY
 
+      - name: Build governance summary artifact
+        if: always()
+        env:
+          GH_RUN_ID: ${{ github.run_id }}
+          GH_RUN_ATTEMPT: ${{ github.run_attempt }}
+          GH_SHA: ${{ github.sha }}
+          GH_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import datetime as dt
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          release_lane = os.environ.get('RELEASE_CONTROLLED_LANE', '').strip().lower() == 'true'
+          lane = 'release' if release_lane else 'non-release'
+          out_path = Path(os.environ['GOVERNANCE_SUMMARY_JSON'])
+          out_path.parent.mkdir(parents=True, exist_ok=True)
+
+          # Collect all governance artifact paths + sha256
+          artifact_files = {
+              'corpus_matrix': Path(os.environ['CORPUS_MATRIX']),
+              'corpus_summary': Path(os.environ['CORPUS_SUMMARY']),
+              'corpus_artifacts_metadata': Path(os.environ['CORPUS_OUTPUT_DIR']) / 'corpus-artifacts-metadata.json',
+              'policy_outcome': Path(os.environ['POLICY_OUTCOME_JSON']),
+              'artifact_manifest': Path(os.environ['ARTIFACT_MANIFEST_JSON']),
+              'artifact_linkage_outcome': Path(os.environ['ARTIFACT_LINKAGE_OUTCOME_JSON']),
+              'reason_codes_index': Path(os.environ['REASON_CODES_INDEX_JSON']),
+              'policy_drift_outcome': Path(os.environ['POLICY_DRIFT_OUTCOME_JSON']),
+              'envelope_cohesion_outcome': Path(os.environ['ENVELOPE_COHESION_OUTCOME_JSON']),
+              'determinism_outcome': Path(os.environ['DETERMINISM_OUTCOME_JSON']),
+          }
+
+          artifacts = []
+          for name in sorted(artifact_files):
+              path = artifact_files[name]
+              entry = {'name': name, 'path': path.as_posix(), 'exists': path.is_file(), 'sha256': ''}
+              if path.is_file():
+                  entry['sha256'] = hashlib.sha256(path.read_bytes()).hexdigest()
+              artifacts.append(entry)
+
+          # Also include case report files
+          reports_dir = Path(os.environ['CORPUS_REPORTS_DIR'])
+          if reports_dir.is_dir():
+              for rp in sorted(reports_dir.rglob('*')):
+                  if rp.is_file():
+                      artifacts.append({
+                          'name': 'case_report',
+                          'path': rp.as_posix(),
+                          'exists': True,
+                          'sha256': hashlib.sha256(rp.read_bytes()).hexdigest(),
+                      })
+
+          # Aggregate all emitted reason codes from governance artifacts
+          all_reasons = []
+          reason_source_files = [
+              ('policy_outcome', Path(os.environ['POLICY_OUTCOME_JSON'])),
+              ('artifact_linkage_outcome', Path(os.environ['ARTIFACT_LINKAGE_OUTCOME_JSON'])),
+              ('policy_drift_outcome', Path(os.environ['POLICY_DRIFT_OUTCOME_JSON'])),
+              ('envelope_cohesion_outcome', Path(os.environ['ENVELOPE_COHESION_OUTCOME_JSON'])),
+              ('determinism_outcome', Path(os.environ['DETERMINISM_OUTCOME_JSON'])),
+          ]
+          for source, path in reason_source_files:
+              if not path.is_file():
+                  continue
+              try:
+                  data = json.loads(path.read_text(encoding='utf-8'))
+                  for reason in data.get('reasons', []):
+                      if isinstance(reason, dict) and reason.get('code'):
+                          all_reasons.append({
+                              'code': reason['code'],
+                              'message': reason.get('message', ''),
+                              'source': source,
+                          })
+              except Exception:
+                  pass
+
+          all_reasons.sort(key=lambda r: (r.get('code', ''), r.get('source', ''), r.get('message', '')))
+
+          # Determine overall verdict from all gate_result fields
+          gate_results = []
+          for _, path in reason_source_files:
+              if not path.is_file():
+                  continue
+              try:
+                  data = json.loads(path.read_text(encoding='utf-8'))
+                  gr = str(data.get('gate_result', '')).strip().lower()
+                  if gr:
+                      gate_results.append(gr)
+              except Exception:
+                  pass
+
+          if 'fail' in gate_results:
+              verdict = 'fail'
+          elif 'warn' in gate_results:
+              verdict = 'warn'
+          elif gate_results:
+              verdict = 'pass'
+          else:
+              verdict = 'unknown'
+
+          payload = {
+              'schema_version': 'governance-summary-v1',
+              'timestamp': dt.datetime.now(dt.timezone.utc).isoformat(),
+              'lane': lane,
+              'lane_context': {
+                  'release_controlled': release_lane,
+                  'ref': os.environ.get('GH_REF', ''),
+                  'sha': os.environ.get('GH_SHA', ''),
+                  'run_id': os.environ.get('GH_RUN_ID', ''),
+                  'run_attempt': os.environ.get('GH_RUN_ATTEMPT', ''),
+              },
+              'verdict': verdict,
+              'reason_count': len(all_reasons),
+              'reasons': all_reasons,
+              'artifacts': artifacts,
+              'artifact_count': len(artifacts),
+              'gate_results': {source: '' for source, _ in reason_source_files},
+          }
+
+          # Fill in actual gate results
+          for source, path in reason_source_files:
+              if not path.is_file():
+                  payload['gate_results'][source] = 'missing'
+                  continue
+              try:
+                  data = json.loads(path.read_text(encoding='utf-8'))
+                  payload['gate_results'][source] = str(data.get('gate_result', 'unknown')).strip().lower()
+              except Exception:
+                  payload['gate_results'][source] = 'parse_error'
+
+          out_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          print(f'wrote governance summary: {out_path} verdict={verdict} artifacts={len(artifacts)} reasons={len(all_reasons)}')
+          PY
+
       - name: Upload corpus matrix artifact
         uses: actions/upload-artifact@v4
         if: always()
@@ -1495,6 +1633,7 @@ jobs:
             ${{ env.POLICY_DRIFT_OUTCOME_JSON }}
             ${{ env.ENVELOPE_COHESION_OUTCOME_JSON }}
             ${{ env.DETERMINISM_OUTCOME_JSON }}
+            ${{ env.GOVERNANCE_SUMMARY_JSON }}
 
       - name: Upload corpus summary artifact
         uses: actions/upload-artifact@v4
@@ -1552,6 +1691,9 @@ jobs:
           fi
           if [[ -f "${DETERMINISM_OUTCOME_JSON}" ]]; then
             cp "${DETERMINISM_OUTCOME_JSON}" evidence/envelope-inputs/
+          fi
+          if [[ -f "${GOVERNANCE_SUMMARY_JSON}" ]]; then
+            cp "${GOVERNANCE_SUMMARY_JSON}" evidence/envelope-inputs/
           fi
           if [[ -n "${{ steps.lockfile_digest.outputs.lockfile_path }}" && -f "${{ steps.lockfile_digest.outputs.lockfile_path }}" ]]; then
             mkdir -p evidence/envelope-inputs/lockfiles

@@ -178,3 +178,49 @@ INF-2 (gate parser + completeness checks):
   - release lanes: any determinism reason is hard-fail (`gate_result=fail`, step exits non-zero)
   - non-release lanes: warning-only posture (`gate_result=warn`) with no gate tightening
 - `determinism-outcome-v1.json` is uploaded with corpus artifacts and included in release-lane unified evidence envelope inputs when present.
+
+## Phase 1 Completion Summary (2026-02-16)
+
+**Status: COMPLETE**
+
+### Governance Artifact Inventory (per CI run)
+
+| # | Artifact | Path | Schema Version |
+|---|----------|------|----------------|
+| 1 | Corpus Matrix Report | `evidence/validator/test-output/corpus-matrix-report-v1.json` | corpus-matrix-v1 |
+| 2 | Corpus Summary (MD) | `evidence/validator/test-output/corpus-summary.md` | — |
+| 3 | Per-case Reports | `evidence/validator/test-output/corpus-reports/**` | — |
+| 4 | Corpus Artifacts Metadata | `evidence/validator/test-output/corpus-artifacts-metadata.json` | — |
+| 5 | Policy Outcome | `evidence/validator/test-output/policy-outcome-v1.json` | policy-outcome-v1 |
+| 6 | Artifact Manifest | `evidence/validator/test-output/artifact-manifest-v1.json` | artifact-manifest-v1 |
+| 7 | Artifact Linkage Outcome | `evidence/validator/test-output/artifact-linkage-outcome-v1.json` | artifact-linkage-outcome-v1 |
+| 8 | Reason Codes Index | `evidence/validator/test-output/reason-codes-index-v1.json` | reason-codes-index-v1 |
+| 9 | Policy Drift Outcome | `evidence/validator/test-output/policy-drift-outcome-v1.json` | policy-drift-outcome-v1 |
+| 10 | Envelope Cohesion Outcome | `evidence/validator/test-output/envelope-cohesion-outcome-v1.json` | envelope-cohesion-outcome-v1 |
+| 11 | Determinism Outcome | `evidence/validator/test-output/determinism-outcome-v1.json` | determinism-outcome-v1 |
+| 12 | Governance Summary | `evidence/validator/test-output/governance-summary-v1.json` | governance-summary-v1 |
+
+### Exit Criteria Verification
+
+All Phase-1 exit criteria are met:
+
+- ✅ Workflow emits matrix SHA-256
+- ✅ Workflow fails on missing `lineage.runner_version`
+- ✅ Blocking mode enforces `totals.fail == 0` and `totals.skipped == 0`
+- ✅ Non-blocking mode cannot run in release-controlled lanes
+- ✅ Release-controlled workflow uploads corpus artifacts in evidence envelope path
+- ✅ Deterministic artifact manifest with sha256 + role tagging
+- ✅ Cross-artifact linkage integrity validation
+- ✅ Reason code catalog with severity and trend-ready structure
+- ✅ Policy drift guardrails across all governance artifacts
+- ✅ Envelope cohesion validation (artifact ↔ envelope input mapping)
+- ✅ Replay-determinism self-check (canonical digest stability)
+- ✅ Governance summary artifact aggregating all artifacts, reasons, and verdict
+
+### Consolidation Review Notes
+
+- No remaining TODOs, FIXMEs, or HACKs in workflow or scripts
+- Default source ref SHA (`e65ef29bc36ad65b641a903a6b23f488a95c3f3f`) is overridable via `UO_EVIDENCE_CORPUS_DEFAULT_REF` repo var; literal fallback is intentional for bootstrap
+- All JSON artifacts use deterministic sorted keys + sorted reason arrays
+- Lane semantics are consistent: release = hard-fail, non-release = warn-only
+- All 12 governance artifacts are uploaded and included in release envelope inputs
