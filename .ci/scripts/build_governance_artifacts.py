@@ -368,6 +368,11 @@ def build_governance_trends() -> None:
     out_path = Path(_env("GOVERNANCE_TRENDS_JSON"))
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
+    max_runs = int(_env("GOVERNANCE_TRENDS_MAX_RUNS", "20") or "20")
+    prior_dir = Path(_env("GOVERNANCE_TRENDS_PRIOR_DIR", "evidence/validator/test-output/prior-trends"))
+    fetch_status = _env("PRIOR_TRENDS_FETCH_STATUS", "skipped")
+    fetched_count = int(_env("PRIOR_TRENDS_FETCHED_COUNT", "0") or "0")
+
     summary_path = Path(_env("GOVERNANCE_SUMMARY_JSON"))
     verdict = "unknown"
     reason_counts_by_severity = {"error": 0, "warning": 0, "notice": 0}
@@ -408,16 +413,81 @@ def build_governance_trends() -> None:
         "timestamp": dt.datetime.now(dt.timezone.utc).isoformat(),
     }
 
+    # --- Attempt historical accumulation from prior trend artifacts ---
+    mode = "baseline"
+    mode_reason = ""
+    historical_runs: list[dict] = []
+
+    if fetch_status in ("ok",) and fetched_count > 0 and prior_dir.is_dir():
+        prior_files = sorted(prior_dir.glob("trends-run-*.json"))
+        for pf in prior_files:
+            try:
+                prior = json.loads(pf.read_text(encoding="utf-8"))
+                if not isinstance(prior, dict):
+                    continue
+                for run in prior.get("runs", []):
+                    if not isinstance(run, dict):
+                        continue
+                    # Deduplicate by (run_id, run_attempt)
+                    rid = str(run.get("run_id", ""))
+                    ratt = str(run.get("run_attempt", ""))
+                    if rid:
+                        historical_runs.append(run)
+            except Exception:
+                continue
+
+        if historical_runs:
+            mode = "historical"
+        else:
+            mode_reason = "prior artifacts fetched but contained no valid run records"
+    elif fetch_status == "no_prior_runs":
+        mode_reason = "no prior successful workflow runs found"
+    elif fetch_status == "no_artifacts":
+        mode_reason = "prior runs found but no trend artifacts available"
+    elif fetch_status == "skipped":
+        mode_reason = "historical fetch step was skipped"
+    else:
+        mode_reason = f"historical fetch status: {fetch_status}"
+
+    # --- Merge: current + historical, deduplicate, sort, cap ---
+    all_runs = [run_record] + historical_runs
+
+    # Deduplicate by (run_id, run_attempt), keeping first occurrence (current run wins)
+    seen: set[tuple[str, str]] = set()
+    deduped: list[dict] = []
+    for run in all_runs:
+        key = (str(run.get("run_id", "")), str(run.get("run_attempt", "")))
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(run)
+
+    # Sort by timestamp descending (most recent first), then run_id descending for stability
+    deduped.sort(key=lambda r: (r.get("timestamp", ""), str(r.get("run_id", ""))), reverse=True)
+
+    # Cap to max_runs
+    if len(deduped) > max_runs:
+        deduped = deduped[:max_runs]
+
+    note = ""
+    if mode == "baseline":
+        note = f"Historical context unavailable ({mode_reason or 'unknown'}); baseline record only."
+    else:
+        note = f"Accumulated {len(deduped)} run records ({len(historical_runs)} prior + 1 current, capped at {max_runs})."
+
     payload = {
         "schema_version": "governance-trends-v1",
-        "mode": "baseline",
-        "note": "Historical context unavailable in runner; baseline record only.",
-        "runs": [run_record],
+        "mode": mode,
+        "note": note,
+        "max_runs": max_runs,
+        "runs": deduped,
     }
 
-    out_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    print(f"wrote governance trends: {out_path} mode=baseline")
+    if mode == "baseline" and mode_reason:
+        payload["baseline_reason"] = mode_reason
 
+    out_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    print(f"wrote governance trends: {out_path} mode={mode} runs={len(deduped)}")
 
 # ---------------------------------------------------------------------------
 # 6. Sign governance artifacts (HMAC-SHA256)

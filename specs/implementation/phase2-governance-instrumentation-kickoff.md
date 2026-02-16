@@ -39,3 +39,31 @@ Depends on: Phase-1 (corpus CI wiring + evidence validator gate)
 4. Included in unified evidence envelope inputs on release lane.
 5. All existing gates pass unchanged.
 6. Static checks (yaml lint) pass.
+
+### Slice 3 — Dashboard Summary Integration ✅
+- `governance-dashboard-v1.json` emitted with trend deltas, verdict history, artifact inventory.
+- Included in unified evidence envelope inputs on release lane.
+- Dashboard reads from governance-trends and governance-summary artifacts.
+
+### Slice 4 — Historical Trend Accumulation ✅
+- **Workflow upgrade**: new step `Fetch prior governance trends from recent successful runs` uses `gh api` to download `governance-trends-v1.json` from prior successful `corpus-evidence-ci` artifacts (bounded by `GOVERNANCE_TRENDS_LOOKBACK_RUNS`, default 5).
+- **Trend builder upgrade**: `build_governance_trends()` merges prior run records with current run deterministically:
+  - Deduplicates by `(run_id, run_attempt)` — current run wins on collision.
+  - Sorts by timestamp descending for stable ordering.
+  - Caps total records at `GOVERNANCE_TRENDS_MAX_RUNS` (default 20) to prevent unbounded growth.
+- **Mode field**: `mode` switches from `"baseline"` to `"historical"` when prior records are successfully ingested.
+- **Graceful degradation**: if fetch step fails, is skipped, or yields no valid records, trends artifact degrades to `mode: "baseline"` with explicit `baseline_reason` field and log annotation (reason codes: `no_prior_runs`, `no_artifacts`, `skipped`, etc.).
+- **Gate semantics unchanged**: trends artifact is informational; no new gate failures introduced.
+- **New env vars / repo vars**:
+  - `GOVERNANCE_TRENDS_PRIOR_DIR` — working directory for fetched prior trends files.
+  - `GOVERNANCE_TRENDS_MAX_RUNS` (repo var, default `20`) — cap on accumulated run records.
+  - `GOVERNANCE_TRENDS_LOOKBACK_RUNS` (repo var, default `5`) — how many prior successful runs to fetch.
+- **Artifact contract addition**: `governance-trends-v1.json` now includes `max_runs` field and optional `baseline_reason` field.
+
+## Acceptance Criteria (Slice 4)
+1. Prior trend records fetched from recent successful CI runs when available.
+2. Deterministic merge: dedup by `(run_id, run_attempt)`, timestamp-descending sort, capped at `max_runs`.
+3. `mode: "historical"` when prior records merged; `mode: "baseline"` with `baseline_reason` when degraded.
+4. Fetch failure → clean degradation with annotation, no gate failure.
+5. All existing gates pass unchanged.
+6. Static checks pass.
