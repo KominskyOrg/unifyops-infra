@@ -130,3 +130,19 @@ INF-2 (gate parser + completeness checks):
 - Severity semantics are lane-aware without changing gate outcomes: release lanes classify emitted reasons as `error`; non-release lanes classify by source gate posture (`policy fail => error, else warning`; linkage `fail => error`, `warn => warning`, otherwise `notice`).
 - Workflow now emits deterministic diagnostics block `reason-code-diagnostics-v1` summarizing lane + severity counts (`error|warning|notice`) for both release and non-release operator triage.
 - `reason-codes-index-v1.json` is uploaded with corpus artifacts and included in release-lane unified evidence envelope inputs when present.
+
+## Rollout slice update (2026-02-16, Mode A Phase-1 policy-drift guardrails)
+- Added deterministic cross-artifact policy-drift check across `policy-outcome-v1.json`, `reason-codes-index-v1.json`, and `artifact-linkage-outcome-v1.json`.
+- New deterministic drift artifact: `evidence/validator/test-output/policy-drift-outcome-v1.json` with contract fields: `schema_version`, `lane`, `gate_result`, `reasons[]`, `source_artifacts`, and normalized `policy_fields` snapshots.
+- Added deterministic drift reason codes (`CMX_DRIFT_*`) for mismatch classes:
+  - `CMX_DRIFT_ARTIFACT_MISSING`
+  - `CMX_DRIFT_ARTIFACT_INVALID`
+  - `CMX_DRIFT_LANE_MISMATCH`
+  - `CMX_DRIFT_POLICY_GATE_RESULT_MISMATCH`
+  - `CMX_DRIFT_LINKAGE_GATE_RESULT_MISMATCH`
+  - `CMX_DRIFT_REF_MODE_MISMATCH`
+  - `CMX_DRIFT_REASON_INDEX_SHAPE_INVALID`
+- Lane semantics:
+  - release lanes: any drift reason triggers hard-fail (`gate_result=fail`, step exits non-zero)
+  - non-release lanes: drift emits warning-only diagnostics (`gate_result=warn`) and preserves rollout posture
+- Drift artifact is now uploaded with corpus artifacts and included in release-lane unified evidence envelope inputs when present.

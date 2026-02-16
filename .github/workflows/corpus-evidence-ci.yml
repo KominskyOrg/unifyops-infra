@@ -32,6 +32,7 @@ jobs:
       ARTIFACT_MANIFEST_JSON: evidence/validator/test-output/artifact-manifest-v1.json
       ARTIFACT_LINKAGE_OUTCOME_JSON: evidence/validator/test-output/artifact-linkage-outcome-v1.json
       REASON_CODES_INDEX_JSON: evidence/validator/test-output/reason-codes-index-v1.json
+      POLICY_DRIFT_OUTCOME_JSON: evidence/validator/test-output/policy-drift-outcome-v1.json
       # Release-controlled lanes: tag pipelines by default.
       RELEASE_CONTROLLED_LANE: ${{ startsWith(github.ref, 'refs/tags/') && 'true' || 'false' }}
       # Temporary rollout toggle (disabled by default).
@@ -1137,6 +1138,141 @@ jobs:
           print('=== /reason-code-diagnostics-v1 ===')
           print(f'wrote reason code index: {out_path} entries={len(reason_codes)}')
           PY
+
+      - name: Validate policy drift across governance artifacts
+        if: always()
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          release_lane = os.environ.get('RELEASE_CONTROLLED_LANE', '').strip().lower() == 'true'
+          expected_lane = 'release' if release_lane else 'non-release'
+
+          policy_path = Path(os.environ['POLICY_OUTCOME_JSON'])
+          reason_index_path = Path(os.environ['REASON_CODES_INDEX_JSON'])
+          linkage_path = Path(os.environ['ARTIFACT_LINKAGE_OUTCOME_JSON'])
+          out_path = Path(os.environ['POLICY_DRIFT_OUTCOME_JSON'])
+
+          reasons = []
+
+          def add_reason(code: str, message: str) -> None:
+              reasons.append({'code': code, 'message': message})
+
+          def normalize_lane(value: object) -> str:
+              token = str(value or '').strip().lower()
+              if token in {'release', 'release-controlled', 'release_controlled', 'true', '1', 'yes', 'on'}:
+                  return 'release'
+              if token in {'non-release', 'non_release', 'false', '0', 'no', 'off'}:
+                  return 'non-release'
+              if token == '':
+                  return 'unknown'
+              return token
+
+          def load_payload(path: Path, source: str) -> dict:
+              if not path.is_file():
+                  add_reason('CMX_DRIFT_ARTIFACT_MISSING', f'{source} artifact missing: {path.as_posix()}')
+                  return {}
+              try:
+                  payload = json.loads(path.read_text(encoding='utf-8'))
+              except Exception as exc:
+                  add_reason('CMX_DRIFT_ARTIFACT_INVALID', f'{source} artifact parse failure: {exc}')
+                  return {}
+              if not isinstance(payload, dict):
+                  add_reason('CMX_DRIFT_ARTIFACT_INVALID', f'{source} artifact must be a JSON object')
+                  return {}
+              return payload
+
+          policy = load_payload(policy_path, 'policy_outcome')
+          reason_index = load_payload(reason_index_path, 'reason_codes_index')
+          linkage = load_payload(linkage_path, 'artifact_linkage_outcome')
+
+          policy_lane = normalize_lane(policy.get('lane')) if policy else 'unknown'
+          reason_lane = normalize_lane(reason_index.get('lane')) if reason_index else 'unknown'
+          linkage_lane = normalize_lane(linkage.get('lane')) if linkage else 'unknown'
+
+          policy_gate = str(policy.get('gate_result', '')).strip().lower() if policy else ''
+          reason_policy_gate = str(reason_index.get('policy_gate_result', '')).strip().lower() if reason_index else ''
+          linkage_gate = str(linkage.get('gate_result', '')).strip().lower() if linkage else ''
+          reason_linkage_gate = str(reason_index.get('artifact_linkage_gate_result', '')).strip().lower() if reason_index else ''
+
+          policy_ref_mode = str(policy.get('ref_mode', '')).strip().lower() if policy else ''
+          linkage_ref_mode = str(linkage.get('ref_mode', '')).strip().lower() if linkage else ''
+
+          lane_values = sorted(set(v for v in (expected_lane, policy_lane, reason_lane, linkage_lane) if v and v != 'unknown'))
+          if len(lane_values) > 1:
+              add_reason(
+                  'CMX_DRIFT_LANE_MISMATCH',
+                  f'lane mismatch across artifacts: expected={expected_lane} policy={policy_lane} reason_index={reason_lane} linkage={linkage_lane}',
+              )
+
+          if policy_gate and reason_policy_gate and policy_gate != reason_policy_gate:
+              add_reason(
+                  'CMX_DRIFT_POLICY_GATE_RESULT_MISMATCH',
+                  f'policy gate_result mismatch: policy_outcome={policy_gate} reason_codes_index.policy_gate_result={reason_policy_gate}',
+              )
+
+          if linkage_gate and reason_linkage_gate and linkage_gate != reason_linkage_gate:
+              add_reason(
+                  'CMX_DRIFT_LINKAGE_GATE_RESULT_MISMATCH',
+                  f'artifact linkage gate_result mismatch: artifact_linkage_outcome={linkage_gate} reason_codes_index.artifact_linkage_gate_result={reason_linkage_gate}',
+              )
+
+          ref_values = sorted(set(v for v in (policy_ref_mode, linkage_ref_mode) if v))
+          if len(ref_values) > 1:
+              add_reason(
+                  'CMX_DRIFT_REF_MODE_MISMATCH',
+                  f'ref_mode mismatch across artifacts: policy_outcome={policy_ref_mode or "<empty>"} artifact_linkage_outcome={linkage_ref_mode or "<empty>"}',
+              )
+
+          if reason_index:
+              reason_codes = reason_index.get('reason_codes')
+              severity_totals = reason_index.get('severity_totals')
+              if not isinstance(reason_codes, list):
+                  add_reason('CMX_DRIFT_REASON_INDEX_SHAPE_INVALID', 'reason_codes_index.reason_codes must be an array')
+              if not isinstance(severity_totals, dict):
+                  add_reason('CMX_DRIFT_REASON_INDEX_SHAPE_INVALID', 'reason_codes_index.severity_totals must be an object')
+
+          reasons = sorted(reasons, key=lambda r: (r.get('code', ''), r.get('message', '')))
+          gate_result = 'pass' if not reasons else ('fail' if release_lane else 'warn')
+
+          for reason in reasons:
+              code = reason['code']
+              message = reason['message']
+              if release_lane:
+                  print(f"::error::[POLICY][RELEASE][{code}] {message}")
+              else:
+                  print(f"::warning::[POLICY][NON-RELEASE][{code}] {message}")
+
+          out_payload = {
+              'schema_version': 'policy-drift-outcome-v1',
+              'lane': expected_lane,
+              'gate_result': gate_result,
+              'reasons': reasons,
+              'source_artifacts': {
+                  'policy_outcome': policy_path.as_posix(),
+                  'reason_codes_index': reason_index_path.as_posix(),
+                  'artifact_linkage_outcome': linkage_path.as_posix(),
+              },
+              'policy_fields': {
+                  'policy_gate_result': policy_gate or 'unknown',
+                  'reason_index_policy_gate_result': reason_policy_gate or 'unknown',
+                  'artifact_linkage_gate_result': linkage_gate or 'unknown',
+                  'reason_index_artifact_linkage_gate_result': reason_linkage_gate or 'unknown',
+                  'policy_ref_mode': policy_ref_mode or 'unknown',
+                  'artifact_linkage_ref_mode': linkage_ref_mode or 'unknown',
+              },
+          }
+
+          out_path.parent.mkdir(parents=True, exist_ok=True)
+          out_path.write_text(json.dumps(out_payload, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          print(f'wrote policy drift outcome: {out_path}')
+
+          if release_lane and reasons:
+              raise SystemExit(1)
+          PY
       - name: Upload corpus matrix artifact
         uses: actions/upload-artifact@v4
         if: always()
@@ -1150,6 +1286,7 @@ jobs:
             ${{ env.ARTIFACT_MANIFEST_JSON }}
             ${{ env.ARTIFACT_LINKAGE_OUTCOME_JSON }}
             ${{ env.REASON_CODES_INDEX_JSON }}
+            ${{ env.POLICY_DRIFT_OUTCOME_JSON }}
 
       - name: Upload corpus summary artifact
         uses: actions/upload-artifact@v4
@@ -1198,6 +1335,9 @@ jobs:
           fi
           if [[ -f "${REASON_CODES_INDEX_JSON}" ]]; then
             cp "${REASON_CODES_INDEX_JSON}" evidence/envelope-inputs/
+          fi
+          if [[ -f "${POLICY_DRIFT_OUTCOME_JSON}" ]]; then
+            cp "${POLICY_DRIFT_OUTCOME_JSON}" evidence/envelope-inputs/
           fi
           if [[ -n "${{ steps.lockfile_digest.outputs.lockfile_path }}" && -f "${{ steps.lockfile_digest.outputs.lockfile_path }}" ]]; then
             mkdir -p evidence/envelope-inputs/lockfiles
