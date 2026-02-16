@@ -37,6 +37,7 @@ jobs:
       DETERMINISM_OUTCOME_JSON: evidence/validator/test-output/determinism-outcome-v1.json
       GOVERNANCE_SUMMARY_JSON: evidence/validator/test-output/governance-summary-v1.json
       GOVERNANCE_TRENDS_JSON: evidence/validator/test-output/governance-trends-v1.json
+      ARTIFACT_SIGNATURES_JSON: evidence/validator/test-output/artifact-signatures-v1.json
       # Release-controlled lanes: tag pipelines by default.
       RELEASE_CONTROLLED_LANE: ${{ startsWith(github.ref, 'refs/tags/') && 'true' || 'false' }}
       # Temporary rollout toggle (disabled by default).
@@ -1694,6 +1695,148 @@ jobs:
           print(f'wrote governance trends: {out_path} mode=baseline')
           PY
 
+
+      - name: Sign governance artifacts (HMAC-SHA256)
+        id: artifact_signing
+        if: always()
+        env:
+          GH_SHA: ${{ github.sha }}
+          SIGNING_KEY_SECRET: ${{ secrets.GOVERNANCE_SIGNING_KEY || '' }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import hmac
+          import json
+          import os
+          from pathlib import Path
+
+          # Phase-2 baseline: derive signing key from GITHUB_SHA when no dedicated
+          # secret is configured.  Upgrade path: set GOVERNANCE_SIGNING_KEY secret
+          # for production-grade HMAC integrity.
+          signing_key_secret = os.environ.get('SIGNING_KEY_SECRET', '').strip()
+          gh_sha = os.environ.get('GH_SHA', '').strip()
+
+          if signing_key_secret:
+              signing_key = signing_key_secret.encode('utf-8')
+              key_source = 'secret:GOVERNANCE_SIGNING_KEY'
+          else:
+              signing_key = f'governance-baseline-{gh_sha}'.encode('utf-8')
+              key_source = 'derived:GITHUB_SHA'
+              print('::notice::[SIGNING] Using GITHUB_SHA-derived signing key (Phase-2 baseline). Set GOVERNANCE_SIGNING_KEY secret for production posture.')
+
+          artifact_paths = [
+              Path(os.environ['CORPUS_MATRIX']),
+              Path(os.environ['CORPUS_SUMMARY']),
+              Path(os.environ['CORPUS_OUTPUT_DIR']) / 'corpus-artifacts-metadata.json',
+              Path(os.environ['POLICY_OUTCOME_JSON']),
+              Path(os.environ['ARTIFACT_MANIFEST_JSON']),
+              Path(os.environ['ARTIFACT_LINKAGE_OUTCOME_JSON']),
+              Path(os.environ['REASON_CODES_INDEX_JSON']),
+              Path(os.environ['POLICY_DRIFT_OUTCOME_JSON']),
+              Path(os.environ['ENVELOPE_COHESION_OUTCOME_JSON']),
+              Path(os.environ['DETERMINISM_OUTCOME_JSON']),
+              Path(os.environ['GOVERNANCE_SUMMARY_JSON']),
+              Path(os.environ['GOVERNANCE_TRENDS_JSON']),
+          ]
+
+          entries = []
+          for artifact_path in sorted(artifact_paths, key=lambda p: p.as_posix()):
+              if not artifact_path.is_file():
+                  continue
+              content = artifact_path.read_bytes()
+              sha256_digest = hashlib.sha256(content).hexdigest()
+              hmac_sig = hmac.new(signing_key, content, hashlib.sha256).hexdigest()
+              entries.append({
+                  'path': artifact_path.as_posix(),
+                  'sha256': sha256_digest,
+                  'hmac_sha256': hmac_sig,
+              })
+
+          payload = {
+              'schema_version': 'artifact-signatures-v1',
+              'key_source': key_source,
+              'algorithm': 'HMAC-SHA256',
+              'entries': entries,
+          }
+
+          out_path = Path(os.environ['ARTIFACT_SIGNATURES_JSON'])
+          out_path.parent.mkdir(parents=True, exist_ok=True)
+          out_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          print(f'wrote artifact signatures: {out_path} entries={len(entries)} key_source={key_source}')
+          PY
+
+      - name: Validate artifact tamper evidence
+        id: tamper_validation
+        if: always()
+        env:
+          GH_SHA: ${{ github.sha }}
+          SIGNING_KEY_SECRET: ${{ secrets.GOVERNANCE_SIGNING_KEY || '' }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import hmac
+          import json
+          import os
+          from pathlib import Path
+
+          release_lane = os.environ.get('RELEASE_CONTROLLED_LANE', '').strip().lower() == 'true'
+          sig_path = Path(os.environ['ARTIFACT_SIGNATURES_JSON'])
+
+          if not sig_path.is_file():
+              msg = 'artifact-signatures-v1.json missing; cannot validate tamper evidence'
+              if release_lane:
+                  print(f'::error::[TAMPER] {msg}')
+                  raise SystemExit(1)
+              else:
+                  print(f'::warning::[TAMPER] {msg}')
+                  raise SystemExit(0)
+
+          sig_data = json.loads(sig_path.read_text(encoding='utf-8'))
+
+          # Re-derive signing key using same logic as signing step
+          signing_key_secret = os.environ.get('SIGNING_KEY_SECRET', '').strip()
+          gh_sha = os.environ.get('GH_SHA', '').strip()
+          if signing_key_secret:
+              signing_key = signing_key_secret.encode('utf-8')
+          else:
+              signing_key = f'governance-baseline-{gh_sha}'.encode('utf-8')
+
+          mismatches = []
+          verified = 0
+
+          for entry in sig_data.get('entries', []):
+              artifact_path = Path(entry['path'])
+              if not artifact_path.is_file():
+                  mismatches.append(f'{artifact_path.as_posix()}: file missing')
+                  continue
+
+              content = artifact_path.read_bytes()
+              actual_sha256 = hashlib.sha256(content).hexdigest()
+              actual_hmac = hmac.new(signing_key, content, hashlib.sha256).hexdigest()
+
+              if actual_sha256 != entry['sha256']:
+                  mismatches.append(f"{artifact_path.as_posix()}: sha256 mismatch (expected={entry['sha256']} actual={actual_sha256})")
+              elif actual_hmac != entry['hmac_sha256']:
+                  mismatches.append(f"{artifact_path.as_posix()}: HMAC mismatch (expected={entry['hmac_sha256']} actual={actual_hmac})")
+              else:
+                  verified += 1
+
+          print(f'tamper validation: verified={verified} mismatches={len(mismatches)}')
+
+          if mismatches:
+              for m in mismatches:
+                  if release_lane:
+                      print(f'::error::[TAMPER][RELEASE] {m}')
+                  else:
+                      print(f'::warning::[TAMPER][NON-RELEASE] {m}')
+              if release_lane:
+                  raise SystemExit(1)
+          else:
+              print('::notice::[TAMPER] All governance artifacts verified — no tampering detected.')
+          PY
+
       - name: Upload corpus matrix artifact
         uses: actions/upload-artifact@v4
         if: always()
@@ -1712,6 +1855,7 @@ jobs:
             ${{ env.DETERMINISM_OUTCOME_JSON }}
             ${{ env.GOVERNANCE_SUMMARY_JSON }}
             ${{ env.GOVERNANCE_TRENDS_JSON }}
+            ${{ env.ARTIFACT_SIGNATURES_JSON }}
 
       - name: Upload corpus summary artifact
         uses: actions/upload-artifact@v4
@@ -1775,6 +1919,9 @@ jobs:
           fi
           if [[ -f "${GOVERNANCE_TRENDS_JSON}" ]]; then
             cp "${GOVERNANCE_TRENDS_JSON}" evidence/envelope-inputs/
+          fi
+          if [[ -f "${ARTIFACT_SIGNATURES_JSON}" ]]; then
+            cp "${ARTIFACT_SIGNATURES_JSON}" evidence/envelope-inputs/
           fi
           if [[ -n "${{ steps.lockfile_digest.outputs.lockfile_path }}" && -f "${{ steps.lockfile_digest.outputs.lockfile_path }}" ]]; then
             mkdir -p evidence/envelope-inputs/lockfiles
