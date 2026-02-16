@@ -258,7 +258,6 @@ jobs:
         run: |
           set -euo pipefail
           python -m unifyops_core.evidence.validator.tools.corpus_runner \
-            --runner-version "${UO_EVIDENCE_CORPUS_RUNNER_VERSION}" \
             --corpus-root "${CORPUS_ROOT}" \
             --matrix-out "${CORPUS_MATRIX}" \
             --reports-dir "${CORPUS_REPORTS_DIR}" \
@@ -401,11 +400,31 @@ jobs:
           from pathlib import Path
 
           out = Path(os.environ['CORPUS_OUTPUT_DIR']) / 'corpus-artifacts-metadata.json'
+
+          import hashlib
+
+          configured_runner_version = os.environ.get('UO_EVIDENCE_CORPUS_RUNNER_VERSION', '').strip()
+          lineage_runner_version = '${{ steps.lineage.outputs.runner_version }}'.strip()
+          runner_version = configured_runner_version or lineage_runner_version
+
+          runner_checksum = ''
+          for candidate in (
+              Path('_deps/unifyops/shared/unifyops_core/src/unifyops_core/evidence/validator/tools/corpus_runner.py'),
+              Path('_deps/unifyops/shared/unifyops_core/unifyops_core/evidence/validator/tools/corpus_runner.py'),
+          ):
+              if candidate.is_file():
+                  runner_checksum = hashlib.sha256(candidate.read_bytes()).hexdigest()
+                  break
+
+          lineage_runner_checksum = '${{ steps.lineage.outputs.runner_checksum }}'.strip()
+          if not runner_checksum:
+              runner_checksum = lineage_runner_checksum
+
           data = {
               'corpus_matrix_path': os.environ.get('CORPUS_MATRIX', ''),
               'corpus_matrix_sha256': '${{ steps.matrix_digest.outputs.corpus_matrix_sha256 }}',
-              'runner_version': '${{ steps.lineage.outputs.runner_version }}',
-              'runner_checksum': '${{ steps.lineage.outputs.runner_checksum }}',
+              'runner_version': runner_version,
+              'runner_checksum': runner_checksum,
               'lockfile_path': '${{ steps.lockfile_digest.outputs.lockfile_path }}',
               'lockfile_sha256': '${{ steps.lockfile_digest.outputs.lockfile_sha256 }}',
           }
