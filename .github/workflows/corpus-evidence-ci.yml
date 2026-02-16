@@ -244,6 +244,8 @@ jobs:
           # Local source install is required because published 1.0.0 package variants can import app.config,
           # which is unavailable in this infra workflow context.
           python -m pip install -e _deps/unifyops/shared/unifyops_core
+          # Required for unifyops_core schema import path (pydantic email validation).
+          python -m pip install email-validator
 
       - name: Ensure corpus output directories exist
         run: mkdir -p "${CORPUS_OUTPUT_DIR}" "${CORPUS_REPORTS_DIR}"
