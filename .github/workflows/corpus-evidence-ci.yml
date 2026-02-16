@@ -723,10 +723,12 @@ jobs:
           JSON
           fi
 
-          python3 - <<'PYJSON'
+          POLICY_OUTCOME_PATH="${POLICY_OUTCOME_JSON}" python3 - <<'PYJSON'
           import json
+          import os
           import pathlib
-          path = pathlib.Path("${POLICY_OUTCOME_JSON}")
+
+          path = pathlib.Path(os.environ["POLICY_OUTCOME_PATH"])
           payload = json.loads(path.read_text(encoding="utf-8"))
           if not isinstance(payload, dict):
               raise SystemExit(f"policy outcome payload must be object: {path}")
