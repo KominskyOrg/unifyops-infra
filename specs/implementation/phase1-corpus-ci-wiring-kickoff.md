@@ -91,3 +91,10 @@ INF-2 (gate parser + completeness checks):
 - Lineage hydration remains missing-only (`set_default`), preserving any runner-provided lineage values.
 - Lockfile evidence warning is deterministic and now prints explicit searched paths.
 - When lockfiles are absent, workflow captures supplemental source dependency manifest evidence from `_deps/unifyops/shared/unifyops_core/pyproject.toml` (path + sha256) without changing gate fail-open behavior.
+
+## Release-lane enforcement slice (2026-02-16, Mode A Phase-1 continuation)
+- Release-controlled lanes now hard-fail corpus evidence posture when either condition is unmet: (a) source ref-integrity is not immutable/preflight-validated, or (b) lockfile evidence is absent from the supported search set (`poetry.lock`, `requirements*.txt`, and `_deps/unifyops` equivalents).
+- Supplemental manifest evidence (`_deps/unifyops/shared/unifyops_core/pyproject.toml` + SHA-256) remains collected but is not accepted as a lockfile substitute in release lanes.
+- Non-release behavior is intentionally unchanged for pass/fail gating: mutable refs and missing lockfiles remain warning-only during rollout.
+- Workflow now emits deterministic lane-scoped diagnostics (`[POLICY][RELEASE]` vs `[POLICY][NON-RELEASE]`) so operators can distinguish hard enforcement from rollout warnings.
+- Migration expectation: release-tag pipelines must pin immutable source refs (tag/SHA) and ensure lockfile artifacts are committed/available before enabling release promotion.

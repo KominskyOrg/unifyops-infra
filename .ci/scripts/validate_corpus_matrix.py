@@ -79,6 +79,10 @@ def main() -> int:
     release_controlled = _parse_bool(args.release_controlled)
     non_blocking = _parse_bool(args.non_blocking)
 
+    lane_label = "RELEASE" if release_controlled else "NON-RELEASE"
+    print(f"policy.lane={lane_label}")
+    print(f"policy.non_blocking_requested={str(non_blocking).lower()}")
+
     if release_controlled and non_blocking:
         errors.append("non-blocking mode is prohibited in release-controlled lanes")
 
@@ -154,7 +158,7 @@ def main() -> int:
             print(f"WARNING: {w}")
 
     if errors:
-        print("Corpus gate evaluation: FAIL")
+        print(f"Corpus gate evaluation: FAIL ({lane_label})")
         for e in errors:
             print(f"ERROR: {e}")
 
@@ -174,7 +178,7 @@ def main() -> int:
             return 0
         return 1
 
-    print("Corpus gate evaluation: PASS")
+    print(f"Corpus gate evaluation: PASS ({lane_label})")
     return 0
 
 

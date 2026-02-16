@@ -441,6 +441,8 @@ jobs:
           lockfiles=(poetry.lock requirements*.txt _deps/unifyops/poetry.lock _deps/unifyops/requirements*.txt)
           IFS=$'\n' lockfiles=($(printf '%s\n' "${lockfiles[@]}" | sort -u))
           unset IFS
+          searched_paths="$(printf '%s, ' "${lockfiles[@]}" | sed 's/, $//')"
+          echo "searched_lockfile_paths=${searched_paths}" >> "$GITHUB_OUTPUT"
 
           valid_lockfiles=()
           for lf in "${lockfiles[@]}"; do
@@ -461,11 +463,11 @@ jobs:
           fi
 
           if (( ${#valid_lockfiles[@]} == 0 )); then
-            searched_paths="$(printf '%s, ' "${lockfiles[@]}" | sed 's/, $//')"
             echo "::warning::No lockfile evidence present; searched paths: ${searched_paths}."
             if [[ -n "${manifest_sha}" ]]; then
               echo "Supplemental source dependency manifest detected: ${manifest_path} (sha256=${manifest_sha})"
             fi
+            echo "lockfile_present=false" >> "$GITHUB_OUTPUT"
             echo "lockfile_path=" >> "$GITHUB_OUTPUT"
             echo "lockfile_sha256=" >> "$GITHUB_OUTPUT"
             exit 0
@@ -473,6 +475,7 @@ jobs:
 
           primary="${valid_lockfiles[0]}"
           primary_sha="$(sha256sum "${primary}" | awk '{print $1}')"
+          echo "lockfile_present=true" >> "$GITHUB_OUTPUT"
           echo "lockfile_path=${primary}" >> "$GITHUB_OUTPUT"
           echo "lockfile_sha256=${primary_sha}" >> "$GITHUB_OUTPUT"
           echo "lockfile_path=${primary}"
@@ -486,6 +489,73 @@ jobs:
               echo "::warning::Lockfile disappeared before digesting: ${lf}"
             fi
           done
+
+      - name: Evaluate lane-specific corpus evidence posture
+        if: always()
+        env:
+          PRECHECK_OK: ${{ steps.source_preflight.outputs.preflight_ok }}
+          PRECHECK_ERROR_TYPE: ${{ steps.source_preflight.outputs.error_type }}
+          PRECHECK_ERROR_MESSAGE: ${{ steps.source_preflight.outputs.error_message }}
+          EFFECTIVE_REF: ${{ steps.source_preflight.outputs.effective_ref }}
+          REF_MODE: ${{ steps.source_preflight.outputs.ref_mode }}
+          REF_ORIGIN: ${{ steps.source_preflight.outputs.ref_origin }}
+          LOCKFILE_PRESENT: ${{ steps.lockfile_digest.outputs.lockfile_present }}
+          LOCKFILE_PATH: ${{ steps.lockfile_digest.outputs.lockfile_path }}
+          SEARCHED_LOCKFILE_PATHS: ${{ steps.lockfile_digest.outputs.searched_lockfile_paths }}
+          SOURCE_MANIFEST_PATH: ${{ steps.lockfile_digest.outputs.source_manifest_path }}
+          SOURCE_MANIFEST_SHA256: ${{ steps.lockfile_digest.outputs.source_manifest_sha256 }}
+        run: |
+          set -euo pipefail
+          release_lane="${RELEASE_CONTROLLED_LANE,,}"
+
+          if [[ "${release_lane}" == "true" ]]; then
+            echo "::notice::[POLICY][RELEASE] enforcing immutable source ref + lockfile evidence requirements"
+            failures=()
+
+            if [[ "${PRECHECK_OK:-false}" != "true" ]]; then
+              failures+=("ref-integrity preflight failed (${PRECHECK_ERROR_TYPE:-unknown}): ${PRECHECK_ERROR_MESSAGE:-preflight did not succeed}")
+            elif [[ "${REF_MODE:-mutable}" != "immutable" ]]; then
+              failures+=("ref-integrity requires immutable source ref in release lane, got mode=${REF_MODE:-unset} ref='${EFFECTIVE_REF:-unset}'")
+            else
+              echo "::notice::[POLICY][RELEASE] ref-integrity satisfied: ref='${EFFECTIVE_REF}' origin='${REF_ORIGIN}' mode='${REF_MODE}'"
+            fi
+
+            if [[ "${LOCKFILE_PRESENT:-false}" != "true" || -z "${LOCKFILE_PATH}" ]]; then
+              failures+=("lockfile evidence required in release lane; none found (searched: ${SEARCHED_LOCKFILE_PATHS:-unset})")
+              if [[ -n "${SOURCE_MANIFEST_PATH}" && -n "${SOURCE_MANIFEST_SHA256}" ]]; then
+                echo "::notice::[POLICY][RELEASE] supplemental manifest evidence present only: ${SOURCE_MANIFEST_PATH} (sha256=${SOURCE_MANIFEST_SHA256})"
+              fi
+            else
+              echo "::notice::[POLICY][RELEASE] lockfile evidence satisfied: ${LOCKFILE_PATH}"
+            fi
+
+            if (( ${#failures[@]} > 0 )); then
+              for msg in "${failures[@]}"; do
+                echo "::error::[POLICY][RELEASE] ${msg}"
+              done
+              exit 1
+            fi
+
+            echo "::notice::[POLICY][RELEASE] corpus evidence posture: PASS"
+          else
+            echo "::notice::[POLICY][NON-RELEASE] evaluating corpus evidence posture (warnings only)"
+            if [[ "${REF_MODE:-mutable}" == "immutable" ]]; then
+              echo "::notice::[POLICY][NON-RELEASE] immutable source ref selected: '${EFFECTIVE_REF}'"
+            else
+              echo "::warning::[POLICY][NON-RELEASE] mutable source ref remains allowed during rollout: '${EFFECTIVE_REF}'"
+            fi
+
+            if [[ "${LOCKFILE_PRESENT:-false}" == "true" && -n "${LOCKFILE_PATH}" ]]; then
+              echo "::notice::[POLICY][NON-RELEASE] lockfile evidence captured: ${LOCKFILE_PATH}"
+            else
+              echo "::warning::[POLICY][NON-RELEASE] lockfile evidence missing (allowed in non-release lane; searched: ${SEARCHED_LOCKFILE_PATHS:-unset})"
+              if [[ -n "${SOURCE_MANIFEST_PATH}" && -n "${SOURCE_MANIFEST_SHA256}" ]]; then
+                echo "::notice::[POLICY][NON-RELEASE] supplemental manifest evidence: ${SOURCE_MANIFEST_PATH} (sha256=${SOURCE_MANIFEST_SHA256})"
+              fi
+            fi
+
+            echo "::notice::[POLICY][NON-RELEASE] corpus evidence posture: PASS (non-blocking posture unchanged)"
+          fi
 
       - name: Build corpus artifacts integrity metadata
         if: always()
