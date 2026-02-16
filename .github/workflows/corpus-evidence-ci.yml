@@ -1382,7 +1382,7 @@ jobs:
               },
           }
 
-          output_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + '\\n', encoding='utf-8')
+          output_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + '\n', encoding='utf-8')
           print(f'wrote envelope cohesion outcome: {output_path}')
 
           if release_lane and reasons:
