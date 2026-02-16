@@ -40,6 +40,7 @@ jobs:
       # Use source-of-truth runner code from unifyops repo to avoid drift in published packages.
       UO_EVIDENCE_CORPUS_SOURCE_REPO: ${{ inputs.UO_EVIDENCE_CORPUS_SOURCE_REPO || vars.UO_EVIDENCE_CORPUS_SOURCE_REPO || format('{0}/unifyops', github.repository_owner) }}
       UO_EVIDENCE_CORPUS_SOURCE_REF: ${{ inputs.UO_EVIDENCE_CORPUS_SOURCE_REF || vars.UO_EVIDENCE_CORPUS_SOURCE_REF || '' }}
+      UO_EVIDENCE_CORPUS_DEFAULT_REF: ${{ vars.UO_EVIDENCE_CORPUS_DEFAULT_REF || 'dev' }}
       # Optional for cross-repo private checkout: set secret UO_EVIDENCE_SOURCE_TOKEN with read access.
       UO_EVIDENCE_SOURCE_TOKEN: ${{ secrets.UO_EVIDENCE_SOURCE_TOKEN || '' }}
 
@@ -56,13 +57,17 @@ jobs:
         continue-on-error: true
         env:
           CURRENT_REPO: ${{ github.repository }}
-          CURRENT_HEAD_REF: ${{ github.head_ref }}
-          CURRENT_REF_NAME: ${{ github.ref_name }}
           CURRENT_SHA: ${{ github.sha }}
+          INPUT_SOURCE_REF: ${{ inputs.UO_EVIDENCE_CORPUS_SOURCE_REF || '' }}
+          VAR_SOURCE_REF: ${{ vars.UO_EVIDENCE_CORPUS_SOURCE_REF || '' }}
+          VAR_DEFAULT_REF: ${{ vars.UO_EVIDENCE_CORPUS_DEFAULT_REF || '' }}
         run: |
           set -euo pipefail
           repo="${UO_EVIDENCE_CORPUS_SOURCE_REPO}"
-          requested_ref="${UO_EVIDENCE_CORPUS_SOURCE_REF}"
+          input_source_ref="${INPUT_SOURCE_REF}"
+          var_source_ref="${VAR_SOURCE_REF}"
+          var_default_ref="${VAR_DEFAULT_REF}"
+          default_ref="${UO_EVIDENCE_CORPUS_DEFAULT_REF:-dev}"
           token="${UO_EVIDENCE_SOURCE_TOKEN:-}"
           current_repo="${CURRENT_REPO}"
           release_lane="${RELEASE_CONTROLLED_LANE,,}"
@@ -73,21 +78,37 @@ jobs:
           effective_ref=""
           ref_mode="mutable"
           cross_repo="false"
+          ref_origin=""
 
           if [[ "${repo}" != "${current_repo}" ]]; then
             cross_repo="true"
           fi
 
-          if [[ -n "${requested_ref}" ]]; then
-            effective_ref="${requested_ref}"
-          elif [[ "${cross_repo}" == "false" ]]; then
-            effective_ref="${CURRENT_SHA}"
-          elif [[ "${release_lane}" == "true" ]]; then
-            error_type="missing_ref"
-            error_message="Release-controlled lane requires explicit immutable UO_EVIDENCE_CORPUS_SOURCE_REF for cross-repo source checkout."
+          if [[ -n "${input_source_ref}" ]]; then
+            effective_ref="${input_source_ref}"
+            ref_origin="input:UO_EVIDENCE_CORPUS_SOURCE_REF"
+          elif [[ -n "${var_source_ref}" ]]; then
+            effective_ref="${var_source_ref}"
+            ref_origin="repo_var:UO_EVIDENCE_CORPUS_SOURCE_REF"
+          elif [[ "${cross_repo}" == "true" ]]; then
+            effective_ref="${default_ref}"
+            if [[ -n "${var_default_ref}" ]]; then
+              ref_origin="repo_var:UO_EVIDENCE_CORPUS_DEFAULT_REF"
+            else
+              ref_origin="default_literal:dev"
+            fi
           else
-            effective_ref="${CURRENT_HEAD_REF:-${CURRENT_REF_NAME}}"
-            echo "::warning::Using mutable branch ref fallback '${effective_ref}' for non-release cross-repo checkout. Set UO_EVIDENCE_CORPUS_SOURCE_REF to a tag or commit SHA for immutable provenance."
+            effective_ref="${CURRENT_SHA}"
+            ref_origin="same_repo_default:github.sha"
+          fi
+
+          if [[ -z "${effective_ref}" ]]; then
+            error_type="missing_ref"
+            if [[ "${cross_repo}" == "true" ]]; then
+              error_message="Unable to resolve cross-repo source ref. Set UO_EVIDENCE_CORPUS_SOURCE_REF input/repo var or define UO_EVIDENCE_CORPUS_DEFAULT_REF (stable branch/tag)."
+            else
+              error_message="Unable to resolve same-repo source ref from github.sha."
+            fi
           fi
 
           if [[ -z "${error_type}" ]]; then
@@ -108,7 +129,7 @@ jobs:
             error_message="Cross-repo source checkout requires secrets.UO_EVIDENCE_SOURCE_TOKEN with read access to '${repo}'."
           fi
 
-          echo "Source selection: repo='${repo}' cross_repo='${cross_repo}' ref='${effective_ref:-<unset>}' mode='${ref_mode}' release_lane='${release_lane}'"
+          echo "Source selection: repo='${repo}' cross_repo='${cross_repo}' ref='${effective_ref:-<unset>}' origin='${ref_origin:-<unset>}' mode='${ref_mode}' release_lane='${release_lane}'"
 
           if [[ -z "${error_type}" ]]; then
             remote="https://github.com/${repo}.git"
@@ -154,6 +175,7 @@ jobs:
           echo "effective_ref=${effective_ref}" >> "$GITHUB_OUTPUT"
           echo "ref_mode=${ref_mode}" >> "$GITHUB_OUTPUT"
           echo "cross_repo=${cross_repo}" >> "$GITHUB_OUTPUT"
+          echo "ref_origin=${ref_origin}" >> "$GITHUB_OUTPUT"
 
           if [[ "${preflight_ok}" == "true" ]]; then
             echo "Source preflight passed for ${repo}@${effective_ref} (mode=${ref_mode})."
