@@ -29,6 +29,7 @@ jobs:
       CORPUS_SUMMARY: evidence/validator/test-output/corpus-summary.md
       CORPUS_REPORTS_DIR: evidence/validator/test-output/corpus-reports
       POLICY_OUTCOME_JSON: evidence/validator/test-output/policy-outcome-v1.json
+      ARTIFACT_MANIFEST_JSON: evidence/validator/test-output/artifact-manifest-v1.json
       # Release-controlled lanes: tag pipelines by default.
       RELEASE_CONTROLLED_LANE: ${{ startsWith(github.ref, 'refs/tags/') && 'true' || 'false' }}
       # Temporary rollout toggle (disabled by default).
@@ -735,6 +736,89 @@ jobs:
           print(f"policy outcome JSON validated: {path}")
           PYJSON
 
+
+      - name: Build deterministic artifact manifest index
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p "${CORPUS_OUTPUT_DIR}"
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          output_dir = Path(os.environ['CORPUS_OUTPUT_DIR'])
+          manifest_path = Path(os.environ['ARTIFACT_MANIFEST_JSON'])
+
+          role_sources = {
+              'matrix': [Path(os.environ['CORPUS_MATRIX'])],
+              'summary': [Path(os.environ['CORPUS_SUMMARY'])],
+              'policy_outcome': [Path(os.environ['POLICY_OUTCOME_JSON'])],
+              'metadata': [output_dir / 'corpus-artifacts-metadata.json'],
+          }
+
+          reports_dir = Path(os.environ['CORPUS_REPORTS_DIR'])
+          case_report_files = []
+          if reports_dir.is_dir():
+              case_report_files = [p for p in reports_dir.rglob('*') if p.is_file()]
+          role_sources['case_reports'] = sorted(case_report_files, key=lambda p: p.as_posix())
+
+          entries = []
+          for role in ('matrix', 'summary', 'case_reports', 'policy_outcome', 'metadata'):
+              paths = role_sources[role]
+              if role != 'case_reports':
+                  paths = [p for p in paths if p.is_file()]
+              for path in paths:
+                  entries.append({
+                      'path': path.as_posix(),
+                      'role': role,
+                      'sha256': hashlib.sha256(path.read_bytes()).hexdigest(),
+                  })
+
+          entries.sort(key=lambda item: item['path'])
+
+          payload = {
+              'schema_version': 'artifact-manifest-v1',
+              'entries': entries,
+          }
+          manifest_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          print(f'wrote artifact manifest: {manifest_path} entries={len(entries)}')
+          PY
+
+      - name: Enforce artifact role presence by lane
+        if: always()
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          manifest_path = Path(os.environ['ARTIFACT_MANIFEST_JSON'])
+          release_lane = os.environ.get('RELEASE_CONTROLLED_LANE', '').strip().lower() == 'true'
+
+          required_roles = {'matrix', 'summary', 'case_reports', 'policy_outcome', 'metadata'}
+
+          present_roles = set()
+          if manifest_path.is_file():
+              data = json.loads(manifest_path.read_text(encoding='utf-8'))
+              for entry in data.get('entries', []):
+                  role = str(entry.get('role', '')).strip()
+                  if role:
+                      present_roles.add(role)
+
+          missing = sorted(required_roles - present_roles)
+          if not missing:
+              print('artifact role presence check: all required roles present')
+          elif release_lane:
+              for role in missing:
+                  print(f'::error::[POLICY][RELEASE][ARTIFACT_ROLE_MISSING] required artifact role missing from manifest: {role}')
+              raise SystemExit(1)
+          else:
+              for role in missing:
+                  print(f'::warning::[POLICY][NON-RELEASE] required artifact role missing from manifest (warning-only in non-release lane): {role}')
+          PY
       - name: Upload corpus matrix artifact
         uses: actions/upload-artifact@v4
         if: always()
@@ -745,6 +829,7 @@ jobs:
             ${{ env.CORPUS_MATRIX }}
             ${{ env.CORPUS_OUTPUT_DIR }}/corpus-artifacts-metadata.json
             ${{ env.POLICY_OUTCOME_JSON }}
+            ${{ env.ARTIFACT_MANIFEST_JSON }}
 
       - name: Upload corpus summary artifact
         uses: actions/upload-artifact@v4
@@ -784,6 +869,9 @@ jobs:
           cp -R "${CORPUS_REPORTS_DIR}" evidence/envelope-inputs/
           if [[ -f "${CORPUS_OUTPUT_DIR}/corpus-artifacts-metadata.json" ]]; then
             cp "${CORPUS_OUTPUT_DIR}/corpus-artifacts-metadata.json" evidence/envelope-inputs/integrity-metadata.json
+          fi
+          if [[ -f "${ARTIFACT_MANIFEST_JSON}" ]]; then
+            cp "${ARTIFACT_MANIFEST_JSON}" evidence/envelope-inputs/
           fi
           if [[ -n "${{ steps.lockfile_digest.outputs.lockfile_path }}" && -f "${{ steps.lockfile_digest.outputs.lockfile_path }}" ]]; then
             mkdir -p evidence/envelope-inputs/lockfiles

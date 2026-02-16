@@ -107,3 +107,9 @@ INF-2 (gate parser + completeness checks):
 - Introduced explicit expected-case-count resolver step with stable provenance labels (`configured`, `auto-derived`, `fallback`) and wired validator invocation to consume the resolved value.
 - Added policy outcome artifact self-check before upload to guarantee `policy-outcome-v1.json` exists and parses as valid JSON in both release and non-release lanes; missing artifact is materialized as deterministic fallback JSON with coded reason `CMX_POLICY_OUTCOME_ABSENT`.
 - Validator now enforces deterministic reason ordering by sorting gate reason entries by `(code, message)` before emitting logs/artifacts, reducing diff churn in CI outputs.
+
+## Rollout slice update (2026-02-16, Mode A Phase-1 artifact-manifest hardening)
+- Workflow now generates deterministic artifact index `evidence/validator/test-output/artifact-manifest-v1.json` with sorted entries (`path`, `sha256`, `role`) across matrix, summary, case reports, policy outcome, and metadata outputs.
+- Manifest generation is order-stable by sorting case-report paths and globally sorting manifest entries by path before emission.
+- Added lane-aware artifact-role presence check keyed off the manifest: release-controlled lanes hard-fail only when required roles are missing, while non-release lanes emit warning-only diagnostics (existing non-release gate semantics preserved).
+- Artifact manifest is uploaded with corpus matrix artifacts and included in release-lane unified evidence envelope inputs when present.
