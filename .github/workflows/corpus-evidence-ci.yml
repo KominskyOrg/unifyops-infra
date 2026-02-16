@@ -16,6 +16,7 @@ on:
       UO_EVIDENCE_CORPUS_SOURCE_REF:
         description: 'Optional override for source ref (branch/tag/SHA) used by corpus runner checkout.'
         required: false
+        default: 'e65ef29bc36ad65b641a903a6b23f488a95c3f3f'
         type: string
 
 jobs:
@@ -40,7 +41,7 @@ jobs:
       # Use source-of-truth runner code from unifyops repo to avoid drift in published packages.
       UO_EVIDENCE_CORPUS_SOURCE_REPO: ${{ inputs.UO_EVIDENCE_CORPUS_SOURCE_REPO || vars.UO_EVIDENCE_CORPUS_SOURCE_REPO || format('{0}/unifyops', github.repository_owner) }}
       UO_EVIDENCE_CORPUS_SOURCE_REF: ${{ inputs.UO_EVIDENCE_CORPUS_SOURCE_REF || vars.UO_EVIDENCE_CORPUS_SOURCE_REF || '' }}
-      UO_EVIDENCE_CORPUS_DEFAULT_REF: ${{ vars.UO_EVIDENCE_CORPUS_DEFAULT_REF || 'dev' }}
+      UO_EVIDENCE_CORPUS_DEFAULT_REF: ${{ vars.UO_EVIDENCE_CORPUS_DEFAULT_REF || 'e65ef29bc36ad65b641a903a6b23f488a95c3f3f' }}
       # Optional for cross-repo private checkout: set secret UO_EVIDENCE_SOURCE_TOKEN with read access.
       UO_EVIDENCE_SOURCE_TOKEN: ${{ secrets.UO_EVIDENCE_SOURCE_TOKEN || '' }}
 
@@ -67,7 +68,7 @@ jobs:
           input_source_ref="${INPUT_SOURCE_REF}"
           var_source_ref="${VAR_SOURCE_REF}"
           var_default_ref="${VAR_DEFAULT_REF}"
-          default_ref="${UO_EVIDENCE_CORPUS_DEFAULT_REF:-dev}"
+          default_ref="${UO_EVIDENCE_CORPUS_DEFAULT_REF:-e65ef29bc36ad65b641a903a6b23f488a95c3f3f}"
           token="${UO_EVIDENCE_SOURCE_TOKEN:-}"
           current_repo="${CURRENT_REPO}"
           release_lane="${RELEASE_CONTROLLED_LANE,,}"
@@ -95,7 +96,7 @@ jobs:
             if [[ -n "${var_default_ref}" ]]; then
               ref_origin="repo_var:UO_EVIDENCE_CORPUS_DEFAULT_REF"
             else
-              ref_origin="default_literal:dev"
+              ref_origin="default_literal:e65ef29bc36ad65b641a903a6b23f488a95c3f3f"
             fi
           else
             effective_ref="${CURRENT_SHA}"
