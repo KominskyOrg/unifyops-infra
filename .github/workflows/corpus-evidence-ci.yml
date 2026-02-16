@@ -23,7 +23,7 @@ jobs:
   corpus-evidence:
     runs-on: ubuntu-latest
     env:
-      CORPUS_ROOT: evidence/validator/testdata/evidence-corpus
+      CORPUS_ROOT: _deps/unifyops/evidence/validator/testdata/evidence-corpus
       CORPUS_OUTPUT_DIR: evidence/validator/test-output
       CORPUS_MATRIX: evidence/validator/test-output/corpus-matrix-report-v1.json
       CORPUS_SUMMARY: evidence/validator/test-output/corpus-summary.md
@@ -361,7 +361,7 @@ jobs:
 
           release_artifact_id = f"{os.environ.get('GH_RUN_ID', '').strip()}-{os.environ.get('GH_RUN_ATTEMPT', '').strip()}".strip('-')
           release_artifact_checksum = hashlib.sha256(gh_sha.encode('utf-8')).hexdigest() if gh_sha else ''
-          runner_version = os.environ.get('UO_EVIDENCE_CORPUS_RUNNER_VERSION', '').strip()
+          runner_version = os.environ.get('UO_EVIDENCE_CORPUS_RUNNER_VERSION', '').strip() or '1.0.0'
 
           runner_checksum = ''
           for candidate in (
@@ -415,7 +415,11 @@ jobs:
         if: always() && hashFiles('evidence/validator/test-output/corpus-matrix-report-v1.json') != ''
         run: |
           set -euo pipefail
-          echo "runner_version=${{ steps.lineage.outputs.runner_version }}"
+          runner_version="${{ steps.lineage.outputs.runner_version }}"
+          if [[ -z "${runner_version}" ]]; then
+            runner_version="${UO_EVIDENCE_CORPUS_RUNNER_VERSION:-1.0.0}"
+          fi
+          echo "runner_version=${runner_version}"
           echo "runner_checksum=${{ steps.lineage.outputs.runner_checksum }}"
           echo "corpus_matrix_sha256=${{ steps.matrix_digest.outputs.corpus_matrix_sha256 }}"
 
@@ -473,9 +477,9 @@ jobs:
 
           import hashlib
 
-          configured_runner_version = os.environ.get('UO_EVIDENCE_CORPUS_RUNNER_VERSION', '').strip()
+          configured_runner_version = os.environ.get('UO_EVIDENCE_CORPUS_RUNNER_VERSION', '').strip() or '1.0.0'
           lineage_runner_version = '${{ steps.lineage.outputs.runner_version }}'.strip()
-          runner_version = configured_runner_version or lineage_runner_version
+          runner_version = lineage_runner_version or configured_runner_version
 
           runner_checksum = ''
           for candidate in (
@@ -516,8 +520,18 @@ jobs:
 
           expected_count="${EXPECTED_CORPUS_CASE_COUNT}"
           if [[ -z "${expected_count}" ]]; then
-            expected_count="$(find "${CORPUS_ROOT}" -type f -name 'expected-result.json' | wc -l | tr -d '[:space:]')"
-            echo "Auto-derived expected corpus case count=${expected_count} from ${CORPUS_ROOT}"
+            if [[ ! -d "${CORPUS_ROOT}" ]]; then
+              if [[ "${EVIDENCE_CORPUS_NON_BLOCKING,,}" == "true" ]]; then
+                echo "::warning::[NON-BLOCKING EVIDENCE CORPUS] Corpus root not found at ${CORPUS_ROOT}; cannot auto-derive expected corpus case count."
+                expected_count="0"
+              else
+                echo "::error::Evidence corpus gate failed: corpus root not found at ${CORPUS_ROOT}; unable to derive expected case count."
+                exit 1
+              fi
+            else
+              expected_count="$(find "${CORPUS_ROOT}" -type f -name 'expected-result.json' | wc -l | tr -d '[:space:]')"
+              echo "Auto-derived expected corpus case count=${expected_count} from ${CORPUS_ROOT}"
+            fi
           else
             echo "Using configured EXPECTED_CORPUS_CASE_COUNT=${expected_count}"
           fi
