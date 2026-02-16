@@ -67,3 +67,27 @@ Depends on: Phase-1 (corpus CI wiring + evidence validator gate)
 4. Fetch failure → clean degradation with annotation, no gate failure.
 5. All existing gates pass unchanged.
 6. Static checks pass.
+
+### Slice 5 — Workflow Refactor: Extract Remaining Inline Logic ✅
+- **Source preflight**: extracted ~160-line inline bash block into `.ci/scripts/source_preflight.sh`.
+  - Workflow step now invokes `bash .ci/scripts/source_preflight.sh` (1 line vs ~160 inline).
+  - All outputs preserved: `preflight_ok`, `error_type`, `error_message`, `effective_ref`, `ref_mode`, `cross_repo`, `ref_origin`, `token_present`, `repo_endpoint_status`, `ref_check_status`.
+- **Lineage/digest emission**: consolidated 7 inline steps into `.ci/scripts/emit_lineage.py`.
+  - Single `python3 .ci/scripts/emit_lineage.py` invocation replaces: matrix SHA-256, hydrate lineage, extract lineage, runner audit, lockfile digest, expected case count, preflight summary.
+  - Step id `lineage_digests` replaces former `matrix_digest`, `lineage`, `lockfile_digest`, `expected_case_count` ids. All downstream `${{ steps.*.outputs.* }}` references updated.
+- **Signing/tamper**: consolidated 2 separate steps into `.ci/scripts/sign_and_verify.py`.
+  - Single step `sign_and_verify` replaces former `artifact_signing` + `tamper_validation` steps.
+  - Internally delegates to `build_governance_artifacts.py sign-governance-artifacts` then `validate-tamper-evidence`.
+- **Envelope builder**: simplified verbose per-file `if/cp` pattern into a loop.
+- **Net result**: workflow reduced from 909 → 509 lines (44% reduction, -400 lines).
+- All env var contracts, output paths, and lane semantics unchanged.
+
+## Acceptance Criteria (Slice 5)
+1. All three extraction scripts pass static checks (bash -n, py_compile).
+2. Workflow YAML valid, line count ≤ 520.
+3. All existing step output contracts preserved (downstream refs updated).
+4. CI run passes green on branch push.
+
+## Remaining Phase-2 Work
+- No further slices planned. Phase-2 governance instrumentation is feature-complete.
+- Future improvements: consider extracting the `release_posture_policy` step and the `gate semantics` step into Python scripts for further reduction (optional, diminishing returns).

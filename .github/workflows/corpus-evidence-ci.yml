@@ -76,167 +76,7 @@ jobs:
           INPUT_SOURCE_REF: ${{ inputs.UO_EVIDENCE_CORPUS_SOURCE_REF || '' }}
           VAR_SOURCE_REF: ${{ vars.UO_EVIDENCE_CORPUS_SOURCE_REF || '' }}
           VAR_DEFAULT_REF: ${{ vars.UO_EVIDENCE_CORPUS_DEFAULT_REF || '' }}
-        run: |
-          set -euo pipefail
-          repo="${UO_EVIDENCE_CORPUS_SOURCE_REPO}"
-          input_source_ref="${INPUT_SOURCE_REF}"
-          var_source_ref="${VAR_SOURCE_REF}"
-          var_default_ref="${VAR_DEFAULT_REF}"
-          default_ref="${UO_EVIDENCE_CORPUS_DEFAULT_REF:-e65ef29bc36ad65b641a903a6b23f488a95c3f3f}"
-          token="${UO_EVIDENCE_SOURCE_TOKEN:-}"
-          current_repo="${CURRENT_REPO}"
-          release_lane="${RELEASE_CONTROLLED_LANE,,}"
-
-          preflight_ok="false"
-          error_type=""
-          error_message=""
-          effective_ref=""
-          ref_mode="mutable"
-          cross_repo="false"
-          ref_origin=""
-
-          if [[ "${repo}" != "${current_repo}" ]]; then
-            cross_repo="true"
-          fi
-
-          if [[ -n "${input_source_ref}" ]]; then
-            effective_ref="${input_source_ref}"
-            ref_origin="input:UO_EVIDENCE_CORPUS_SOURCE_REF"
-          elif [[ -n "${var_source_ref}" ]]; then
-            effective_ref="${var_source_ref}"
-            ref_origin="repo_var:UO_EVIDENCE_CORPUS_SOURCE_REF"
-          elif [[ "${cross_repo}" == "true" ]]; then
-            effective_ref="${default_ref}"
-            if [[ -n "${var_default_ref}" ]]; then
-              ref_origin="repo_var:UO_EVIDENCE_CORPUS_DEFAULT_REF"
-            else
-              ref_origin="default_literal:e65ef29bc36ad65b641a903a6b23f488a95c3f3f"
-            fi
-          else
-            effective_ref="${CURRENT_SHA}"
-            ref_origin="same_repo_default:github.sha"
-          fi
-
-          if [[ -z "${effective_ref}" ]]; then
-            error_type="missing_ref"
-            if [[ "${cross_repo}" == "true" ]]; then
-              error_message="Unable to resolve cross-repo source ref. Set UO_EVIDENCE_CORPUS_SOURCE_REF input/repo var or define UO_EVIDENCE_CORPUS_DEFAULT_REF (stable branch/tag)."
-            else
-              error_message="Unable to resolve same-repo source ref from github.sha."
-            fi
-          fi
-
-          if [[ -z "${error_type}" ]]; then
-            if [[ "${effective_ref}" =~ ^refs/tags/.+ ]] || [[ "${effective_ref}" =~ ^[A-Fa-f0-9]{7,40}$ ]] || [[ "${effective_ref}" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([-.].*)?$ ]]; then
-              ref_mode="immutable"
-            fi
-
-            if [[ "${release_lane}" == "true" && "${ref_mode}" != "immutable" ]]; then
-              error_type="mutable_ref_disallowed"
-              error_message="Release-controlled lane requires immutable source ref (tag or commit SHA), got '${effective_ref}'."
-            elif [[ "${release_lane}" != "true" && "${ref_mode}" != "immutable" ]]; then
-              echo "::warning::Selected source ref '${effective_ref}' is mutable in a non-release lane. Prefer a tag or commit SHA for immutable provenance."
-            fi
-          fi
-
-          if [[ -z "${error_type}" && "${cross_repo}" == "true" && -z "${token}" ]]; then
-            error_type="missing_cross_repo_token"
-            error_message="Cross-repo source checkout requires secrets.UO_EVIDENCE_SOURCE_TOKEN with read access to '${repo}'."
-          fi
-
-          token_present="false"
-          repo_endpoint_status="not_checked"
-          ref_check_status="not_checked"
-          if [[ -n "${token}" ]]; then
-            token_present="true"
-          fi
-
-          if [[ -z "${error_type}" ]]; then
-            auth_args=(-H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28")
-            if [[ -n "${token}" ]]; then
-              auth_args+=(-H "Authorization: Bearer ${token}")
-            fi
-
-            api_base="https://api.github.com/repos/${repo}"
-            repo_resp_file="$(mktemp)"
-            set +e
-            repo_endpoint_status="$(curl -sS -L -o "${repo_resp_file}" -w '%{http_code}' "${auth_args[@]}" "${api_base}")"
-            curl_rc=$?
-            set -e
-
-            if [[ ${curl_rc} -ne 0 ]]; then
-              error_type="checkout_preflight_failed"
-              error_message="Unable to validate source repo '${repo}' via GitHub API (transport error)."
-            elif [[ "${repo_endpoint_status}" == "200" ]]; then
-              :
-            elif [[ "${repo_endpoint_status}" == "401" || "${repo_endpoint_status}" == "403" ]]; then
-              error_type="auth_denied"
-              error_message="Authentication denied for source repo '${repo}'. Verify UO_EVIDENCE_SOURCE_TOKEN read access."
-            elif [[ "${repo_endpoint_status}" == "404" ]]; then
-              error_type="repo_not_found"
-              error_message="Source repo '${repo}' was not found. Verify UO_EVIDENCE_CORPUS_SOURCE_REPO value."
-            else
-              error_type="checkout_preflight_failed"
-              error_message="Unable to validate source repo '${repo}' via GitHub API (status=${repo_endpoint_status})."
-            fi
-            rm -f "${repo_resp_file}"
-
-            if [[ -z "${error_type}" ]]; then
-              ref_endpoint=""
-              if [[ "${effective_ref}" =~ ^refs/tags/(.+)$ ]]; then
-                ref_endpoint="${api_base}/git/ref/tags/${BASH_REMATCH[1]}"
-              elif [[ "${effective_ref}" =~ ^[A-Fa-f0-9]{7,40}$ ]]; then
-                ref_endpoint="${api_base}/commits/${effective_ref}"
-              elif [[ "${effective_ref}" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([-.].*)?$ ]]; then
-                ref_endpoint="${api_base}/git/ref/tags/${effective_ref}"
-              else
-                ref_endpoint="${api_base}/git/ref/heads/${effective_ref}"
-              fi
-
-              ref_resp_file="$(mktemp)"
-              set +e
-              ref_check_status="$(curl -sS -L -o "${ref_resp_file}" -w '%{http_code}' "${auth_args[@]}" "${ref_endpoint}")"
-              curl_rc=$?
-              set -e
-
-              if [[ ${curl_rc} -ne 0 ]]; then
-                error_type="checkout_preflight_failed"
-                error_message="Unable to validate source ref '${effective_ref}' in repo '${repo}' via GitHub API (transport error)."
-              elif [[ "${ref_check_status}" == "200" ]]; then
-                preflight_ok="true"
-              elif [[ "${ref_check_status}" == "404" ]]; then
-                error_type="ref_missing"
-                error_message="Configured ref '${effective_ref}' was not found in source repo '${repo}'."
-              elif [[ "${ref_check_status}" == "401" || "${ref_check_status}" == "403" ]]; then
-                error_type="auth_denied"
-                error_message="Authentication denied for source repo '${repo}'. Verify UO_EVIDENCE_SOURCE_TOKEN read access."
-              else
-                error_type="checkout_preflight_failed"
-                error_message="Unable to validate source ref '${effective_ref}' in repo '${repo}' via GitHub API (status=${ref_check_status})."
-              fi
-              rm -f "${ref_resp_file}"
-            fi
-          fi
-
-          echo "Source selection: repo='${repo}' cross_repo='${cross_repo}' ref='${effective_ref:-<unset>}' origin='${ref_origin:-<unset>}' mode='${ref_mode}' release_lane='${release_lane}' token_present='${token_present:-false}' repo_endpoint_status='${repo_endpoint_status:-not_checked}' ref_check_status='${ref_check_status:-not_checked}'"
-
-          echo "preflight_ok=${preflight_ok}" >> "$GITHUB_OUTPUT"
-          echo "error_type=${error_type}" >> "$GITHUB_OUTPUT"
-          echo "error_message=${error_message}" >> "$GITHUB_OUTPUT"
-          echo "effective_ref=${effective_ref}" >> "$GITHUB_OUTPUT"
-          echo "ref_mode=${ref_mode}" >> "$GITHUB_OUTPUT"
-          echo "cross_repo=${cross_repo}" >> "$GITHUB_OUTPUT"
-          echo "ref_origin=${ref_origin}" >> "$GITHUB_OUTPUT"
-          echo "token_present=${token_present:-false}" >> "$GITHUB_OUTPUT"
-          echo "repo_endpoint_status=${repo_endpoint_status:-not_checked}" >> "$GITHUB_OUTPUT"
-          echo "ref_check_status=${ref_check_status:-not_checked}" >> "$GITHUB_OUTPUT"
-
-          if [[ "${preflight_ok}" == "true" ]]; then
-            echo "Source preflight passed for ${repo}@${effective_ref} (mode=${ref_mode})."
-          else
-            echo "::warning::Source preflight failed (${error_type}): ${error_message}"
-            exit 1
-          fi
+        run: bash .ci/scripts/source_preflight.sh
 
       - name: Checkout unifyops source for corpus runner
         id: source_checkout
@@ -256,10 +96,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          # Local source install is required because published 1.0.0 package variants can import app.config,
-          # which is unavailable in this infra workflow context.
           python -m pip install -e _deps/unifyops/shared/unifyops_core
-          # Required for unifyops_core schema import path (pydantic email validation).
           python -m pip install email-validator
 
       - name: Ensure corpus output directories exist
@@ -320,236 +157,21 @@ jobs:
             fi
           fi
 
-      - name: Emit corpus matrix SHA-256
-        id: matrix_digest
-        if: always() && hashFiles('evidence/validator/test-output/corpus-matrix-report-v1.json') != ''
-        run: |
-          set -euo pipefail
-          digest="$(sha256sum "${CORPUS_MATRIX}" | awk '{print $1}')"
-          echo "corpus_matrix_sha256=${digest}" >> "$GITHUB_OUTPUT"
-          echo "corpus_matrix_sha256=${digest}"
-
-      - name: Hydrate corpus matrix lineage defaults
-        if: always() && hashFiles('evidence/validator/test-output/corpus-matrix-report-v1.json') != ''
+      - name: Emit lineage, digests, and preflight summary
+        id: lineage_digests
+        if: always()
         env:
           GH_SHA: ${{ github.sha }}
           GH_RUN_ID: ${{ github.run_id }}
           GH_RUN_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import hashlib
-          import importlib.util
-          import json
-          import os
-          import subprocess
-          from pathlib import Path
-
-          matrix = Path(os.environ['CORPUS_MATRIX'])
-          data = json.loads(matrix.read_text(encoding='utf-8'))
-          lineage = data.get('lineage')
-          if not isinstance(lineage, dict):
-              lineage = {}
-              data['lineage'] = lineage
-
-          def nonempty(value):
-              return isinstance(value, str) and value.strip() != ''
-
-          def set_default(key, value):
-              if nonempty(lineage.get(key)):
-                  return
-              lineage[key] = value
-
-          gh_sha = os.environ.get('GH_SHA', '').strip()
-
-          source_commit_sha = gh_sha
-          try:
-              dep_sha = subprocess.check_output(
-                  ['git', '-C', '_deps/unifyops', 'rev-parse', 'HEAD'],
-                  text=True,
-                  stderr=subprocess.DEVNULL,
-              ).strip()
-              if dep_sha:
-                  source_commit_sha = dep_sha
-          except Exception:
-              pass
-
-          release_artifact_id = f"{os.environ.get('GH_RUN_ID', '').strip()}-{os.environ.get('GH_RUN_ATTEMPT', '').strip()}".strip('-')
-          release_artifact_checksum = hashlib.sha256(gh_sha.encode('utf-8')).hexdigest() if gh_sha else ''
-          runner_version = os.environ.get('UO_EVIDENCE_CORPUS_RUNNER_VERSION', '').strip() or '1.0.0'
-
-          runner_candidates = [
-              Path('_deps/unifyops/shared/unifyops_core/src/unifyops_core/evidence/validator/tools/corpus_runner.py'),
-              Path('_deps/unifyops/shared/unifyops_core/unifyops_core/evidence/validator/tools/corpus_runner.py'),
-              Path('shared/unifyops_core/src/unifyops_core/evidence/validator/tools/corpus_runner.py'),
-              Path('shared/unifyops_core/unifyops_core/evidence/validator/tools/corpus_runner.py'),
-          ]
-          spec = importlib.util.find_spec('unifyops_core.evidence.validator.tools.corpus_runner')
-          if spec and spec.origin:
-              module_path = Path(spec.origin)
-              if module_path.suffix == '.pyc':
-                  module_path = Path(str(module_path).replace('/__pycache__/', '/')).with_suffix('.py')
-              runner_candidates.insert(0, module_path)
-
-          runner_checksum = ''
-          for candidate in runner_candidates:
-              if candidate.is_file():
-                  runner_checksum = hashlib.sha256(candidate.read_bytes()).hexdigest()
-                  break
-
-          set_default('source_commit_sha', source_commit_sha)
-          set_default('release_artifact_id', release_artifact_id)
-          set_default('release_artifact_checksum', release_artifact_checksum)
-          set_default('runner_version', runner_version)
-          set_default('runner_checksum', runner_checksum)
-
-          matrix.write_text(json.dumps(data, indent=2, sort_keys=True) + '\n', encoding='utf-8')
-          print('hydrated lineage defaults (missing-only)')
-          PY
-
-
-      - name: Extract required lineage outputs
-        id: lineage
-        if: always() && hashFiles('evidence/validator/test-output/corpus-matrix-report-v1.json') != ''
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-
-          matrix = Path("evidence/validator/test-output/corpus-matrix-report-v1.json")
-          data = json.loads(matrix.read_text(encoding="utf-8"))
-          lineage = data.get("lineage", {})
-
-          import os
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
-              for key in (
-                  "source_commit_sha",
-                  "release_artifact_id",
-                  "release_artifact_checksum",
-                  "runner_version",
-                  "runner_checksum",
-              ):
-                  value = str(lineage.get(key, "")).strip()
-                  out.write(f"{key}={value}\\n")
-          PY
-
-      - name: Emit runner lineage audit fields
-        if: always() && hashFiles('evidence/validator/test-output/corpus-matrix-report-v1.json') != ''
-        run: |
-          set -euo pipefail
-          runner_version="${{ steps.lineage.outputs.runner_version }}"
-          if [[ -z "${runner_version}" ]]; then
-            runner_version="${UO_EVIDENCE_CORPUS_RUNNER_VERSION:-1.0.0}"
-          fi
-          echo "runner_version=${runner_version}"
-          echo "runner_checksum=${{ steps.lineage.outputs.runner_checksum }}"
-          echo "corpus_matrix_sha256=${{ steps.matrix_digest.outputs.corpus_matrix_sha256 }}"
-
-      - name: Emit lockfile SHA-256 (if present)
-        id: lockfile_digest
-        if: always()
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-          lockfiles=(poetry.lock requirements*.txt _deps/unifyops/poetry.lock _deps/unifyops/requirements*.txt)
-          IFS=$'\n' lockfiles=($(printf '%s\n' "${lockfiles[@]}" | sort -u))
-          unset IFS
-          searched_paths="$(printf '%s, ' "${lockfiles[@]}" | sed 's/, $//')"
-          echo "searched_lockfile_paths=${searched_paths}" >> "$GITHUB_OUTPUT"
-
-          valid_lockfiles=()
-          for lf in "${lockfiles[@]}"; do
-            if [[ -f "${lf}" ]]; then
-              valid_lockfiles+=("${lf}")
-            fi
-          done
-
-          manifest_path="_deps/unifyops/shared/unifyops_core/pyproject.toml"
-          manifest_sha=""
-          if [[ -f "${manifest_path}" ]]; then
-            manifest_sha="$(sha256sum "${manifest_path}" | awk '{print $1}')"
-            echo "source_manifest_path=${manifest_path}" >> "$GITHUB_OUTPUT"
-            echo "source_manifest_sha256=${manifest_sha}" >> "$GITHUB_OUTPUT"
-          else
-            echo "source_manifest_path=" >> "$GITHUB_OUTPUT"
-            echo "source_manifest_sha256=" >> "$GITHUB_OUTPUT"
-          fi
-
-          if (( ${#valid_lockfiles[@]} == 0 )); then
-            echo "::warning::No lockfile evidence present; searched paths: ${searched_paths}."
-            if [[ -n "${manifest_sha}" ]]; then
-              echo "Supplemental source dependency manifest detected: ${manifest_path} (sha256=${manifest_sha})"
-            fi
-            echo "lockfile_present=false" >> "$GITHUB_OUTPUT"
-            echo "lockfile_path=" >> "$GITHUB_OUTPUT"
-            echo "lockfile_sha256=" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          primary="${valid_lockfiles[0]}"
-          primary_sha="$(sha256sum "${primary}" | awk '{print $1}')"
-          echo "lockfile_present=true" >> "$GITHUB_OUTPUT"
-          echo "lockfile_path=${primary}" >> "$GITHUB_OUTPUT"
-          echo "lockfile_sha256=${primary_sha}" >> "$GITHUB_OUTPUT"
-          echo "lockfile_path=${primary}"
-          echo "lockfile_sha256=${primary_sha}"
-
-          for lf in "${valid_lockfiles[@]}"; do
-            if [[ -f "${lf}" ]]; then
-              sha="$(sha256sum "${lf}" | awk '{print $1}')"
-              echo "lockfile_sha256[${lf}]=${sha}"
-            else
-              echo "::warning::Lockfile disappeared before digesting: ${lf}"
-            fi
-          done
-
-      - name: Resolve expected corpus case count
-        id: expected_case_count
-        if: always()
-        run: |
-          set -euo pipefail
-          expected_count="${EXPECTED_CORPUS_CASE_COUNT}"
-          source_label="configured:EXPECTED_CORPUS_CASE_COUNT"
-
-          if [[ -z "${expected_count}" ]]; then
-            if [[ ! -d "${CORPUS_ROOT}" ]]; then
-              expected_count="0"
-              source_label="fallback:missing_corpus_root"
-              echo "::warning::Corpus root not found at ${CORPUS_ROOT}; expected case count defaults to 0 for deterministic reporting."
-            else
-              expected_count="$(find "${CORPUS_ROOT}" -type f -name 'expected-result.json' | wc -l | tr -d '[:space:]')"
-              source_label="auto-derived:${CORPUS_ROOT}"
-              echo "Auto-derived expected corpus case count=${expected_count} from ${CORPUS_ROOT}"
-            fi
-          else
-            echo "Using configured EXPECTED_CORPUS_CASE_COUNT=${expected_count}"
-          fi
-
-          echo "expected_count=${expected_count}" >> "$GITHUB_OUTPUT"
-          echo "expected_count_source=${source_label}" >> "$GITHUB_OUTPUT"
-
-      - name: Emit deterministic preflight summary
-        if: always()
-        env:
           SUMMARY_LANE: ${{ env.RELEASE_CONTROLLED_LANE }}
           SUMMARY_SOURCE_REPO: ${{ env.UO_EVIDENCE_CORPUS_SOURCE_REPO }}
           SUMMARY_SOURCE_REF: ${{ steps.source_preflight.outputs.effective_ref }}
           SUMMARY_REF_MODE: ${{ steps.source_preflight.outputs.ref_mode }}
           SUMMARY_PREFLIGHT_OK: ${{ steps.source_preflight.outputs.preflight_ok }}
-          SUMMARY_LOCKFILE_PRESENT: ${{ steps.lockfile_digest.outputs.lockfile_present }}
-          SUMMARY_EXPECTED_CASE_COUNT_SOURCE: ${{ steps.expected_case_count.outputs.expected_count_source }}
-        run: |
-          set -euo pipefail
-          echo "=== corpus-preflight-summary-v1 ==="
-          echo "lane=${SUMMARY_LANE}"
-          echo "source_repo=${SUMMARY_SOURCE_REPO}"
-          echo "source_ref=${SUMMARY_SOURCE_REF:-unset}"
-          echo "resolved_ref_mode=${SUMMARY_REF_MODE:-unset}"
-          echo "preflight_status=${SUMMARY_PREFLIGHT_OK:-false}"
-          echo "lockfile_present=${SUMMARY_LOCKFILE_PRESENT:-false}"
-          echo "expected_case_count_source=${SUMMARY_EXPECTED_CASE_COUNT_SOURCE:-unset}"
-          echo "=== /corpus-preflight-summary-v1 ==="
+          SUMMARY_LOCKFILE_PRESENT: ''
+          SUMMARY_EXPECTED_CASE_COUNT_SOURCE: ''
+        run: python3 .ci/scripts/emit_lineage.py
 
       - name: Evaluate lane-specific corpus evidence posture
         id: release_posture_policy
@@ -561,11 +183,11 @@ jobs:
           EFFECTIVE_REF: ${{ steps.source_preflight.outputs.effective_ref }}
           REF_MODE: ${{ steps.source_preflight.outputs.ref_mode }}
           REF_ORIGIN: ${{ steps.source_preflight.outputs.ref_origin }}
-          LOCKFILE_PRESENT: ${{ steps.lockfile_digest.outputs.lockfile_present }}
-          LOCKFILE_PATH: ${{ steps.lockfile_digest.outputs.lockfile_path }}
-          SEARCHED_LOCKFILE_PATHS: ${{ steps.lockfile_digest.outputs.searched_lockfile_paths }}
-          SOURCE_MANIFEST_PATH: ${{ steps.lockfile_digest.outputs.source_manifest_path }}
-          SOURCE_MANIFEST_SHA256: ${{ steps.lockfile_digest.outputs.source_manifest_sha256 }}
+          LOCKFILE_PRESENT: ${{ steps.lineage_digests.outputs.lockfile_present }}
+          LOCKFILE_PATH: ${{ steps.lineage_digests.outputs.lockfile_path }}
+          SEARCHED_LOCKFILE_PATHS: ${{ steps.lineage_digests.outputs.searched_lockfile_paths }}
+          SOURCE_MANIFEST_PATH: ${{ steps.lineage_digests.outputs.source_manifest_path }}
+          SOURCE_MANIFEST_SHA256: ${{ steps.lineage_digests.outputs.source_manifest_sha256 }}
         run: |
           set -euo pipefail
           release_lane="${RELEASE_CONTROLLED_LANE,,}"
@@ -624,13 +246,13 @@ jobs:
       - name: Build corpus artifacts integrity metadata
         if: always()
         env:
-          LINEAGE_RUNNER_VERSION: ${{ steps.lineage.outputs.runner_version }}
-          LINEAGE_RUNNER_CHECKSUM: ${{ steps.lineage.outputs.runner_checksum }}
-          CORPUS_MATRIX_SHA256: ${{ steps.matrix_digest.outputs.corpus_matrix_sha256 }}
-          LOCKFILE_PATH: ${{ steps.lockfile_digest.outputs.lockfile_path }}
-          LOCKFILE_SHA256: ${{ steps.lockfile_digest.outputs.lockfile_sha256 }}
-          SOURCE_MANIFEST_PATH: ${{ steps.lockfile_digest.outputs.source_manifest_path }}
-          SOURCE_MANIFEST_SHA256: ${{ steps.lockfile_digest.outputs.source_manifest_sha256 }}
+          LINEAGE_RUNNER_VERSION: ${{ steps.lineage_digests.outputs.runner_version }}
+          LINEAGE_RUNNER_CHECKSUM: ${{ steps.lineage_digests.outputs.runner_checksum }}
+          CORPUS_MATRIX_SHA256: ${{ steps.lineage_digests.outputs.corpus_matrix_sha256 }}
+          LOCKFILE_PATH: ${{ steps.lineage_digests.outputs.lockfile_path }}
+          LOCKFILE_SHA256: ${{ steps.lineage_digests.outputs.lockfile_sha256 }}
+          SOURCE_MANIFEST_PATH: ${{ steps.lineage_digests.outputs.source_manifest_path }}
+          SOURCE_MANIFEST_SHA256: ${{ steps.lineage_digests.outputs.source_manifest_sha256 }}
         run: python3 .ci/scripts/build_governance_artifacts.py build-integrity-metadata
       - name: Validate corpus matrix policy gate
         id: validate_matrix_policy
@@ -645,12 +267,12 @@ jobs:
             --non-blocking-owner "${EVIDENCE_CORPUS_NON_BLOCKING_OWNER}"
             --non-blocking-expiry "${EVIDENCE_CORPUS_NON_BLOCKING_EXPIRY}"
             --ref-mode "${{ steps.source_preflight.outputs.ref_mode }}"
-            --lockfile-present "${{ steps.lockfile_digest.outputs.lockfile_present }}"
+            --lockfile-present "${{ steps.lineage_digests.outputs.lockfile_present }}"
             --policy-outcome-json "${POLICY_OUTCOME_JSON}"
           )
 
-          expected_count="${{ steps.expected_case_count.outputs.expected_count }}"
-          expected_count_source="${{ steps.expected_case_count.outputs.expected_count_source }}"
+          expected_count="${{ steps.lineage_digests.outputs.expected_count }}"
+          expected_count_source="${{ steps.lineage_digests.outputs.expected_count_source }}"
           if [[ -z "${expected_count}" ]]; then
             echo "::warning::Expected case count output missing from resolver; defaulting to 0"
             expected_count="0"
@@ -671,7 +293,7 @@ jobs:
         env:
           SUMMARY_LANE: ${{ env.RELEASE_CONTROLLED_LANE }}
           SUMMARY_REF_MODE: ${{ steps.source_preflight.outputs.ref_mode }}
-          SUMMARY_LOCKFILE_PRESENT: ${{ steps.lockfile_digest.outputs.lockfile_present }}
+          SUMMARY_LOCKFILE_PRESENT: ${{ steps.lineage_digests.outputs.lockfile_present }}
         run: python3 .ci/scripts/validate_governance.py self-check-policy-outcome
       - name: Build deterministic artifact manifest index
         if: always()
@@ -720,7 +342,6 @@ jobs:
           lookback="${GOVERNANCE_TRENDS_LOOKBACK_RUNS}"
           echo "Fetching up to ${lookback} prior successful corpus-evidence-ci runs..."
 
-          # List recent successful workflow runs for this workflow
           run_ids="$(gh api \
             "/repos/${GH_REPOSITORY}/actions/workflows/corpus-evidence-ci.yml/runs?status=success&per_page=${lookback}" \
             --jq '.workflow_runs[].id' 2>/dev/null || true)"
@@ -734,11 +355,9 @@ jobs:
 
           fetched=0
           for rid in ${run_ids}; do
-            # Skip current run
             if [[ "${rid}" == "${GH_CURRENT_RUN_ID}" ]]; then
               continue
             fi
-            # Download the corpus-matrix-report-v1 artifact which contains governance-trends-v1.json
             artifact_id="$(gh api \
               "/repos/${GH_REPOSITORY}/actions/runs/${rid}/artifacts" \
               --jq '.artifacts[] | select(.name=="corpus-matrix-report-v1") | .id' 2>/dev/null || true)"
@@ -746,11 +365,9 @@ jobs:
               continue
             fi
             dest="${GOVERNANCE_TRENDS_PRIOR_DIR}/trends-run-${rid}.json"
-            # Download and extract just the trends file
             tmpzip="$(mktemp)"
             if gh api "/repos/${GH_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > "${tmpzip}" 2>/dev/null; then
               if unzip -p "${tmpzip}" "evidence/validator/test-output/governance-trends-v1.json" > "${dest}" 2>/dev/null; then
-                # Validate it's actual JSON
                 if python3 -c "import json,sys; json.load(open(sys.argv[1]))" "${dest}" 2>/dev/null; then
                   fetched=$((fetched + 1))
                   echo "  fetched trends from run ${rid}"
@@ -790,20 +407,13 @@ jobs:
           GH_SHA: ${{ github.sha }}
           GH_REF: ${{ github.ref }}
         run: python3 .ci/scripts/build_governance_artifacts.py build-governance-dashboard
-      - name: Sign governance artifacts (HMAC-SHA256)
-        id: artifact_signing
+      - name: Sign governance artifacts and validate tamper evidence
+        id: sign_and_verify
         if: always()
         env:
           GH_SHA: ${{ github.sha }}
           SIGNING_KEY_SECRET: ${{ secrets.GOVERNANCE_SIGNING_KEY || '' }}
-        run: python3 .ci/scripts/build_governance_artifacts.py sign-governance-artifacts
-      - name: Validate artifact tamper evidence
-        id: tamper_validation
-        if: always()
-        env:
-          GH_SHA: ${{ github.sha }}
-          SIGNING_KEY_SECRET: ${{ secrets.GOVERNANCE_SIGNING_KEY || '' }}
-        run: python3 .ci/scripts/build_governance_artifacts.py validate-tamper-evidence
+        run: python3 .ci/scripts/sign_and_verify.py
       - name: Upload corpus matrix artifact
         uses: actions/upload-artifact@v4
         if: always()
@@ -861,42 +471,32 @@ jobs:
           cp "${CORPUS_MATRIX}" evidence/envelope-inputs/
           cp "${CORPUS_SUMMARY}" evidence/envelope-inputs/
           cp -R "${CORPUS_REPORTS_DIR}" evidence/envelope-inputs/
-          if [[ -f "${CORPUS_OUTPUT_DIR}/corpus-artifacts-metadata.json" ]]; then
-            cp "${CORPUS_OUTPUT_DIR}/corpus-artifacts-metadata.json" evidence/envelope-inputs/integrity-metadata.json
-          fi
-          if [[ -f "${ARTIFACT_MANIFEST_JSON}" ]]; then
-            cp "${ARTIFACT_MANIFEST_JSON}" evidence/envelope-inputs/
-          fi
-          if [[ -f "${ARTIFACT_LINKAGE_OUTCOME_JSON}" ]]; then
-            cp "${ARTIFACT_LINKAGE_OUTCOME_JSON}" evidence/envelope-inputs/
-          fi
-          if [[ -f "${REASON_CODES_INDEX_JSON}" ]]; then
-            cp "${REASON_CODES_INDEX_JSON}" evidence/envelope-inputs/
-          fi
-          if [[ -f "${POLICY_DRIFT_OUTCOME_JSON}" ]]; then
-            cp "${POLICY_DRIFT_OUTCOME_JSON}" evidence/envelope-inputs/
-          fi
-          if [[ -f "${ENVELOPE_COHESION_OUTCOME_JSON}" ]]; then
-            cp "${ENVELOPE_COHESION_OUTCOME_JSON}" evidence/envelope-inputs/
-          fi
-          if [[ -f "${DETERMINISM_OUTCOME_JSON}" ]]; then
-            cp "${DETERMINISM_OUTCOME_JSON}" evidence/envelope-inputs/
-          fi
-          if [[ -f "${GOVERNANCE_SUMMARY_JSON}" ]]; then
-            cp "${GOVERNANCE_SUMMARY_JSON}" evidence/envelope-inputs/
-          fi
-          if [[ -f "${GOVERNANCE_TRENDS_JSON}" ]]; then
-            cp "${GOVERNANCE_TRENDS_JSON}" evidence/envelope-inputs/
-          fi
-          if [[ -f "${ARTIFACT_SIGNATURES_JSON}" ]]; then
-            cp "${ARTIFACT_SIGNATURES_JSON}" evidence/envelope-inputs/
-          fi
-          if [[ -f "${GOVERNANCE_DASHBOARD_JSON}" ]]; then
-            cp "${GOVERNANCE_DASHBOARD_JSON}" evidence/envelope-inputs/
-          fi
-          if [[ -n "${{ steps.lockfile_digest.outputs.lockfile_path }}" && -f "${{ steps.lockfile_digest.outputs.lockfile_path }}" ]]; then
+          for f in \
+            "${CORPUS_OUTPUT_DIR}/corpus-artifacts-metadata.json:integrity-metadata.json" \
+            "${ARTIFACT_MANIFEST_JSON}:" \
+            "${ARTIFACT_LINKAGE_OUTCOME_JSON}:" \
+            "${REASON_CODES_INDEX_JSON}:" \
+            "${POLICY_DRIFT_OUTCOME_JSON}:" \
+            "${ENVELOPE_COHESION_OUTCOME_JSON}:" \
+            "${DETERMINISM_OUTCOME_JSON}:" \
+            "${GOVERNANCE_SUMMARY_JSON}:" \
+            "${GOVERNANCE_TRENDS_JSON}:" \
+            "${ARTIFACT_SIGNATURES_JSON}:" \
+            "${GOVERNANCE_DASHBOARD_JSON}:"; do
+            src="${f%%:*}"
+            dest="${f#*:}"
+            if [[ -f "${src}" ]]; then
+              if [[ -n "${dest}" ]]; then
+                cp "${src}" "evidence/envelope-inputs/${dest}"
+              else
+                cp "${src}" evidence/envelope-inputs/
+              fi
+            fi
+          done
+          lockfile_path="${{ steps.lineage_digests.outputs.lockfile_path }}"
+          if [[ -n "${lockfile_path}" && -f "${lockfile_path}" ]]; then
             mkdir -p evidence/envelope-inputs/lockfiles
-            cp "${{ steps.lockfile_digest.outputs.lockfile_path }}" evidence/envelope-inputs/lockfiles/
+            cp "${lockfile_path}" evidence/envelope-inputs/lockfiles/
           fi
           tar -czf evidence/unified-evidence-envelope-inputs.tgz -C evidence envelope-inputs
 
