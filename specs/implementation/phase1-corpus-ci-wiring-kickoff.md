@@ -85,3 +85,9 @@ INF-2 (gate parser + completeness checks):
 - Blocking mode enforces `totals.fail == 0` and `totals.skipped == 0`.
 - Non-blocking mode cannot run in release-controlled lanes.
 - Release-controlled workflow uploads/includes corpus artifacts in evidence envelope path.
+
+## Hardening Note (2026-02-16)
+- Workflow now resolves `runner_checksum` using the installed runner module origin first, then known source paths, to avoid empty lineage checksums in local-source install contexts.
+- Lineage hydration remains missing-only (`set_default`), preserving any runner-provided lineage values.
+- Lockfile evidence warning is deterministic and now prints explicit searched paths.
+- When lockfiles are absent, workflow captures supplemental source dependency manifest evidence from `_deps/unifyops/shared/unifyops_core/pyproject.toml` (path + sha256) without changing gate fail-open behavior.
