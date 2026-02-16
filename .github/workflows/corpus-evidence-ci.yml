@@ -742,6 +742,8 @@ jobs:
 
       - name: Build deterministic artifact manifest index
         if: always()
+        env:
+          SUMMARY_REF_MODE: ${{ steps.source_preflight.outputs.ref_mode }}
         run: |
           set -euo pipefail
           mkdir -p "${CORPUS_OUTPUT_DIR}"
@@ -753,6 +755,21 @@ jobs:
 
           output_dir = Path(os.environ['CORPUS_OUTPUT_DIR'])
           manifest_path = Path(os.environ['ARTIFACT_MANIFEST_JSON'])
+          policy_outcome_path = Path(os.environ['POLICY_OUTCOME_JSON'])
+          release_lane = os.environ.get('RELEASE_CONTROLLED_LANE', '').strip().lower() == 'true'
+          lane = 'release' if release_lane else 'non-release'
+          ref_mode = (os.environ.get('SUMMARY_REF_MODE', '') or '').strip().lower() or 'unknown'
+
+          policy_gate_result = 'unknown'
+          if policy_outcome_path.is_file():
+              try:
+                  policy_payload = json.loads(policy_outcome_path.read_text(encoding='utf-8'))
+                  if isinstance(policy_payload, dict):
+                      candidate = str(policy_payload.get('gate_result', '')).strip().lower()
+                      if candidate:
+                          policy_gate_result = candidate
+              except Exception as exc:  # pragma: no cover - defensive parse for CI artifact emission
+                  print(f'::warning::unable to parse policy outcome for manifest lineage context: {exc}')
 
           role_sources = {
               'matrix': [Path(os.environ['CORPUS_MATRIX'])],
@@ -783,6 +800,14 @@ jobs:
 
           payload = {
               'schema_version': 'artifact-manifest-v1',
+              'lane': lane,
+              'ref_mode': ref_mode,
+              'gate_result': policy_gate_result,
+              'lineage_context': {
+                  'lane': lane,
+                  'ref_mode': ref_mode,
+                  'gate_result': policy_gate_result,
+              },
               'entries': entries,
           }
           manifest_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + '\n', encoding='utf-8')
@@ -825,6 +850,8 @@ jobs:
 
       - name: Validate cross-artifact linkage integrity
         if: always()
+        env:
+          SUMMARY_REF_MODE: ${{ steps.source_preflight.outputs.ref_mode }}
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -834,6 +861,9 @@ jobs:
           from pathlib import Path
 
           release_lane = os.environ.get('RELEASE_CONTROLLED_LANE', '').strip().lower() == 'true'
+          expected_lane = 'release' if release_lane else 'non-release'
+          expected_ref_mode = (os.environ.get('SUMMARY_REF_MODE', '') or '').strip().lower() or 'unknown'
+
           matrix_path = Path(os.environ['CORPUS_MATRIX'])
           policy_path = Path(os.environ['POLICY_OUTCOME_JSON'])
           metadata_path = Path(os.environ['CORPUS_OUTPUT_DIR']) / 'corpus-artifacts-metadata.json'
@@ -844,6 +874,16 @@ jobs:
 
           def add_reason(code: str, message: str) -> None:
               reasons.append({'code': code, 'message': message})
+
+          def normalize_lane(value: object) -> str:
+              token = str(value or '').strip().lower()
+              if token in {'release', 'release-controlled', 'release_controlled', 'true', '1', 'yes', 'on'}:
+                  return 'release'
+              if token in {'non-release', 'non_release', 'false', '0', 'no', 'off'}:
+                  return 'non-release'
+              if token == '':
+                  return 'unknown'
+              return token
 
           metadata = {}
           if metadata_path.is_file():
@@ -865,15 +905,67 @@ jobs:
                           f'metadata.{key} mismatch: expected={expected} actual={actual or "<empty>"}',
                       )
 
+          policy = {}
+          if policy_path.is_file():
+              try:
+                  payload = json.loads(policy_path.read_text(encoding='utf-8'))
+                  if isinstance(payload, dict):
+                      policy = payload
+                  else:
+                      add_reason('CMX_LINEAGE_POLICY_OUTCOME_INVALID', 'policy outcome artifact must be a JSON object')
+              except Exception as exc:
+                  add_reason('CMX_LINEAGE_POLICY_OUTCOME_INVALID', f'policy outcome artifact parse failure: {exc}')
+          else:
+              add_reason('CMX_LINEAGE_POLICY_OUTCOME_MISSING', f'policy outcome artifact missing: {policy_path.as_posix()}')
+
+          policy_lane = normalize_lane(policy.get('lane')) if policy else 'unknown'
+          policy_ref_mode = str(policy.get('ref_mode', '')).strip().lower() if policy else ''
+          policy_gate_result = str(policy.get('gate_result', '')).strip().lower() if policy else ''
+
+          manifest = {}
           manifest_entries = {}
           if manifest_path.is_file():
               payload = json.loads(manifest_path.read_text(encoding='utf-8'))
-              for entry in payload.get('entries', []):
-                  p = str(entry.get('path', '')).strip()
-                  if p:
-                      manifest_entries[p] = str(entry.get('sha256', '')).strip().lower()
+              if isinstance(payload, dict):
+                  manifest = payload
+                  for entry in payload.get('entries', []):
+                      p = str(entry.get('path', '')).strip()
+                      if p:
+                          manifest_entries[p] = str(entry.get('sha256', '')).strip().lower()
+              else:
+                  add_reason('CMX_LINKAGE_MANIFEST_INVALID', 'artifact manifest must be a JSON object')
           else:
               add_reason('CMX_LINKAGE_MANIFEST_MISSING', f'artifact manifest missing: {manifest_path.as_posix()}')
+
+          manifest_lane = normalize_lane(manifest.get('lane')) if manifest else 'unknown'
+          manifest_ref_mode = str(manifest.get('ref_mode', '')).strip().lower() if manifest else ''
+          manifest_gate_result = str(manifest.get('gate_result', '')).strip().lower() if manifest else ''
+
+          if policy and (not policy_ref_mode or not policy_gate_result or policy_lane == 'unknown'):
+              add_reason('CMX_LINEAGE_POLICY_FIELDS_MISSING', 'policy outcome missing one or more required lineage fields: lane/ref_mode/gate_result')
+          if manifest and (not manifest_ref_mode or not manifest_gate_result or manifest_lane == 'unknown'):
+              add_reason('CMX_LINEAGE_MANIFEST_FIELDS_MISSING', 'artifact manifest missing one or more required lineage fields: lane/ref_mode/gate_result')
+
+          lane_values = sorted(set(v for v in (expected_lane, policy_lane, manifest_lane) if v and v != 'unknown'))
+          if len(lane_values) > 1:
+              add_reason(
+                  'CMX_LINEAGE_LANE_MISMATCH',
+                  f'lane mismatch across artifacts: expected={expected_lane} policy={policy_lane} manifest={manifest_lane}',
+              )
+
+          ref_values = sorted(set(v for v in (expected_ref_mode, policy_ref_mode, manifest_ref_mode) if v))
+          if len(ref_values) > 1:
+              add_reason(
+                  'CMX_LINEAGE_REF_MODE_MISMATCH',
+                  f'ref_mode mismatch across artifacts: expected={expected_ref_mode} policy={policy_ref_mode or "<empty>"} manifest={manifest_ref_mode or "<empty>"}',
+              )
+
+          gate_values = sorted(set(v for v in (policy_gate_result, manifest_gate_result) if v))
+          if len(gate_values) > 1:
+              add_reason(
+                  'CMX_LINEAGE_GATE_RESULT_MISMATCH',
+                  f'gate_result mismatch across artifacts: policy={policy_gate_result or "<empty>"} manifest={manifest_gate_result or "<empty>"}',
+              )
 
           required_files = [
               ('matrix', matrix_path),
@@ -914,7 +1006,9 @@ jobs:
 
           outcome = {
               'schema_version': 'artifact-linkage-outcome-v1',
-              'lane': 'release' if release_lane else 'non-release',
+              'lane': expected_lane,
+              'ref_mode': expected_ref_mode,
+              'policy_gate_result': policy_gate_result or 'unknown',
               'gate_result': gate_result,
               'reasons': reasons,
           }
