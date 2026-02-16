@@ -31,6 +31,7 @@ jobs:
       POLICY_OUTCOME_JSON: evidence/validator/test-output/policy-outcome-v1.json
       ARTIFACT_MANIFEST_JSON: evidence/validator/test-output/artifact-manifest-v1.json
       ARTIFACT_LINKAGE_OUTCOME_JSON: evidence/validator/test-output/artifact-linkage-outcome-v1.json
+      REASON_CODES_INDEX_JSON: evidence/validator/test-output/reason-codes-index-v1.json
       # Release-controlled lanes: tag pipelines by default.
       RELEASE_CONTROLLED_LANE: ${{ startsWith(github.ref, 'refs/tags/') && 'true' || 'false' }}
       # Temporary rollout toggle (disabled by default).
@@ -1018,6 +1019,124 @@ jobs:
           if release_lane and reasons:
               raise SystemExit(1)
           PY
+
+
+      - name: Build deterministic reason code index artifact
+        if: always()
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          release_lane = os.environ.get('RELEASE_CONTROLLED_LANE', '').strip().lower() == 'true'
+          lane = 'release' if release_lane else 'non-release'
+
+          policy_path = Path(os.environ['POLICY_OUTCOME_JSON'])
+          linkage_path = Path(os.environ['ARTIFACT_LINKAGE_OUTCOME_JSON'])
+          out_path = Path(os.environ['REASON_CODES_INDEX_JSON'])
+
+          def load_json(path: Path) -> dict:
+              if not path.is_file():
+                  return {}
+              try:
+                  payload = json.loads(path.read_text(encoding='utf-8'))
+              except Exception:
+                  return {}
+              return payload if isinstance(payload, dict) else {}
+
+          policy = load_json(policy_path)
+          linkage = load_json(linkage_path)
+
+          policy_gate = str(policy.get('gate_result', '')).strip().lower()
+          linkage_gate = str(linkage.get('gate_result', '')).strip().lower()
+
+          def reason_severity(source: str) -> str:
+              if release_lane:
+                  return 'error'
+              if source == 'policy_outcome':
+                  return 'error' if policy_gate == 'fail' else 'warning'
+              if source == 'artifact_linkage_outcome':
+                  if linkage_gate == 'fail':
+                      return 'error'
+                  if linkage_gate == 'warn':
+                      return 'warning'
+                  return 'notice'
+              return 'warning'
+
+          grouped: dict[str, dict] = {}
+          severity_counts = {'error': 0, 'warning': 0, 'notice': 0}
+
+          def ingest(source: str, payload: dict) -> None:
+              reasons = payload.get('reasons', [])
+              if not isinstance(reasons, list):
+                  return
+              for item in reasons:
+                  if not isinstance(item, dict):
+                      continue
+                  code = str(item.get('code', '')).strip()
+                  if not code:
+                      continue
+                  severity = reason_severity(source)
+                  severity_counts[severity] = severity_counts.get(severity, 0) + 1
+                  entry = grouped.setdefault(code, {
+                      'code': code,
+                      'count': 0,
+                      'severity': severity,
+                      'sources': set(),
+                  })
+                  entry['count'] += 1
+                  entry['sources'].add(source)
+                  if entry['severity'] != 'error' and severity == 'error':
+                      entry['severity'] = 'error'
+                  elif entry['severity'] == 'notice' and severity == 'warning':
+                      entry['severity'] = 'warning'
+
+          ingest('policy_outcome', policy)
+          ingest('artifact_linkage_outcome', linkage)
+
+          reason_codes = []
+          for code in sorted(grouped):
+              item = grouped[code]
+              reason_codes.append({
+                  'code': item['code'],
+                  'count': int(item['count']),
+                  'severity': item['severity'],
+                  'sources': sorted(item['sources']),
+              })
+
+          payload = {
+              'schema_version': 'reason-codes-index-v1',
+              'lane': lane,
+              'policy_gate_result': policy_gate or 'unknown',
+              'artifact_linkage_gate_result': linkage_gate or 'unknown',
+              'source_artifacts': {
+                  'policy_outcome': policy_path.as_posix(),
+                  'artifact_linkage_outcome': linkage_path.as_posix(),
+              },
+              'reason_codes': reason_codes,
+              'severity_totals': {
+                  'error': int(severity_counts.get('error', 0)),
+                  'warning': int(severity_counts.get('warning', 0)),
+                  'notice': int(severity_counts.get('notice', 0)),
+              },
+          }
+
+          out_path.parent.mkdir(parents=True, exist_ok=True)
+          out_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+
+          print('=== reason-code-diagnostics-v1 ===')
+          print(f'lane={lane}')
+          print(f"policy_gate_result={payload['policy_gate_result']}")
+          print(f"artifact_linkage_gate_result={payload['artifact_linkage_gate_result']}")
+          print(f"severity.error={payload['severity_totals']['error']}")
+          print(f"severity.warning={payload['severity_totals']['warning']}")
+          print(f"severity.notice={payload['severity_totals']['notice']}")
+          print(f'reason_code.unique={len(reason_codes)}')
+          print('=== /reason-code-diagnostics-v1 ===')
+          print(f'wrote reason code index: {out_path} entries={len(reason_codes)}')
+          PY
       - name: Upload corpus matrix artifact
         uses: actions/upload-artifact@v4
         if: always()
@@ -1030,6 +1149,7 @@ jobs:
             ${{ env.POLICY_OUTCOME_JSON }}
             ${{ env.ARTIFACT_MANIFEST_JSON }}
             ${{ env.ARTIFACT_LINKAGE_OUTCOME_JSON }}
+            ${{ env.REASON_CODES_INDEX_JSON }}
 
       - name: Upload corpus summary artifact
         uses: actions/upload-artifact@v4
@@ -1075,6 +1195,9 @@ jobs:
           fi
           if [[ -f "${ARTIFACT_LINKAGE_OUTCOME_JSON}" ]]; then
             cp "${ARTIFACT_LINKAGE_OUTCOME_JSON}" evidence/envelope-inputs/
+          fi
+          if [[ -f "${REASON_CODES_INDEX_JSON}" ]]; then
+            cp "${REASON_CODES_INDEX_JSON}" evidence/envelope-inputs/
           fi
           if [[ -n "${{ steps.lockfile_digest.outputs.lockfile_path }}" && -f "${{ steps.lockfile_digest.outputs.lockfile_path }}" ]]; then
             mkdir -p evidence/envelope-inputs/lockfiles

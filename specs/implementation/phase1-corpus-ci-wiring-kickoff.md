@@ -122,3 +122,11 @@ INF-2 (gate parser + completeness checks):
 - Added deterministic lineage consistency mismatch codes across policy/manifest/linkage fields: `CMX_LINEAGE_POLICY_OUTCOME_MISSING`, `CMX_LINEAGE_POLICY_OUTCOME_INVALID`, `CMX_LINEAGE_POLICY_FIELDS_MISSING`, `CMX_LINEAGE_MANIFEST_FIELDS_MISSING`, `CMX_LINEAGE_LANE_MISMATCH`, `CMX_LINEAGE_REF_MODE_MISMATCH`, `CMX_LINEAGE_GATE_RESULT_MISMATCH`.
 - Linkage semantics by lane: release-controlled lanes treat any linkage reason as hard-fail (`gate_result=fail` + step exit non-zero), while non-release lanes emit warning-only diagnostics (`gate_result=warn`) and preserve non-blocking pass posture.
 - Metadata artifact now records explicit linkage references for downstream checks (`policy_outcome_path`, `artifact_manifest_path`) in addition to matrix/ref/lockfile fields.
+
+## Rollout slice update (2026-02-16, Mode A Phase-1 reason-code catalog + trend-ready diagnostics)
+- Added deterministic reason-code catalog artifact `evidence/validator/test-output/reason-codes-index-v1.json` generated on every run from emitted `policy-outcome-v1.json` and `artifact-linkage-outcome-v1.json` reasons.
+- Artifact contract (v1): `schema_version`, `lane`, `policy_gate_result`, `artifact_linkage_gate_result`, `source_artifacts`, `reason_codes[]`, and `severity_totals`.
+- `reason_codes[]` is stable and trend-ready: entries are grouped by `code`, include `count`, `severity`, and sorted `sources`; list ordering is deterministic (`code` ascending).
+- Severity semantics are lane-aware without changing gate outcomes: release lanes classify emitted reasons as `error`; non-release lanes classify by source gate posture (`policy fail => error, else warning`; linkage `fail => error`, `warn => warning`, otherwise `notice`).
+- Workflow now emits deterministic diagnostics block `reason-code-diagnostics-v1` summarizing lane + severity counts (`error|warning|notice`) for both release and non-release operator triage.
+- `reason-codes-index-v1.json` is uploaded with corpus artifacts and included in release-lane unified evidence envelope inputs when present.
