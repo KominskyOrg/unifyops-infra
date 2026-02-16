@@ -129,45 +129,81 @@ jobs:
             error_message="Cross-repo source checkout requires secrets.UO_EVIDENCE_SOURCE_TOKEN with read access to '${repo}'."
           fi
 
-          echo "Source selection: repo='${repo}' cross_repo='${cross_repo}' ref='${effective_ref:-<unset>}' origin='${ref_origin:-<unset>}' mode='${ref_mode}' release_lane='${release_lane}'"
+          token_present="false"
+          repo_endpoint_status="not_checked"
+          ref_check_status="not_checked"
+          if [[ -n "${token}" ]]; then
+            token_present="true"
+          fi
 
           if [[ -z "${error_type}" ]]; then
-            remote="https://github.com/${repo}.git"
-            auth_remote="${remote}"
+            auth_args=(-H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28")
             if [[ -n "${token}" ]]; then
-              auth_remote="https://x-access-token:${token}@github.com/${repo}.git"
+              auth_args+=(-H "Authorization: Bearer ${token}")
             fi
 
-            err_file="$(mktemp)"
+            api_base="https://api.github.com/repos/${repo}"
+            repo_resp_file="$(mktemp)"
             set +e
-            git ls-remote --exit-code "${auth_remote}" "${effective_ref}" > /dev/null 2>"${err_file}"
-            rc=$?
+            repo_endpoint_status="$(curl -sS -L -o "${repo_resp_file}" -w '%{http_code}' "${auth_args[@]}" "${api_base}")"
+            curl_rc=$?
             set -e
-            err_text="$(cat "${err_file}")"
-            rm -f "${err_file}"
 
-            if [[ ${rc} -eq 0 ]]; then
-              preflight_ok="true"
-            elif [[ ${rc} -eq 2 ]]; then
-              error_type="ref_missing"
-              error_message="Configured ref '${effective_ref}' was not found in source repo '${repo}'."
-            elif grep -qiE 'Authentication failed|could not read Username|access denied|HTTP Basic: Access denied|403' <<<"${err_text}"; then
+            if [[ ${curl_rc} -ne 0 ]]; then
+              error_type="checkout_preflight_failed"
+              error_message="Unable to validate source repo '${repo}' via GitHub API (transport error)."
+            elif [[ "${repo_endpoint_status}" == "200" ]]; then
+              :
+            elif [[ "${repo_endpoint_status}" == "401" || "${repo_endpoint_status}" == "403" ]]; then
               error_type="auth_denied"
               error_message="Authentication denied for source repo '${repo}'. Verify UO_EVIDENCE_SOURCE_TOKEN read access."
-            elif grep -qi 'Repository not found' <<<"${err_text}"; then
-              if [[ -n "${token}" ]]; then
-                error_type="repo_not_found"
-                error_message="Source repo '${repo}' was not found. Verify UO_EVIDENCE_CORPUS_SOURCE_REPO value."
-              else
-                error_type="auth_denied"
-                error_message="Source repo '${repo}' is inaccessible without credentials (repo may be private or missing). Set UO_EVIDENCE_SOURCE_TOKEN with read access."
-              fi
+            elif [[ "${repo_endpoint_status}" == "404" ]]; then
+              error_type="repo_not_found"
+              error_message="Source repo '${repo}' was not found. Verify UO_EVIDENCE_CORPUS_SOURCE_REPO value."
             else
               error_type="checkout_preflight_failed"
-              compact_err="$(printf '%s' "${err_text}" | head -n 1)"
-              error_message="Unable to validate source repo/ref ('${repo}' @ '${effective_ref}'): ${compact_err}"
+              error_message="Unable to validate source repo '${repo}' via GitHub API (status=${repo_endpoint_status})."
+            fi
+            rm -f "${repo_resp_file}"
+
+            if [[ -z "${error_type}" ]]; then
+              ref_endpoint=""
+              if [[ "${effective_ref}" =~ ^refs/tags/(.+)$ ]]; then
+                ref_endpoint="${api_base}/git/ref/tags/${BASH_REMATCH[1]}"
+              elif [[ "${effective_ref}" =~ ^[A-Fa-f0-9]{7,40}$ ]]; then
+                ref_endpoint="${api_base}/commits/${effective_ref}"
+              elif [[ "${effective_ref}" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([-.].*)?$ ]]; then
+                ref_endpoint="${api_base}/git/ref/tags/${effective_ref}"
+              else
+                ref_endpoint="${api_base}/git/ref/heads/${effective_ref}"
+              fi
+
+              ref_resp_file="$(mktemp)"
+              set +e
+              ref_check_status="$(curl -sS -L -o "${ref_resp_file}" -w '%{http_code}' "${auth_args[@]}" "${ref_endpoint}")"
+              curl_rc=$?
+              set -e
+
+              if [[ ${curl_rc} -ne 0 ]]; then
+                error_type="checkout_preflight_failed"
+                error_message="Unable to validate source ref '${effective_ref}' in repo '${repo}' via GitHub API (transport error)."
+              elif [[ "${ref_check_status}" == "200" ]]; then
+                preflight_ok="true"
+              elif [[ "${ref_check_status}" == "404" ]]; then
+                error_type="ref_missing"
+                error_message="Configured ref '${effective_ref}' was not found in source repo '${repo}'."
+              elif [[ "${ref_check_status}" == "401" || "${ref_check_status}" == "403" ]]; then
+                error_type="auth_denied"
+                error_message="Authentication denied for source repo '${repo}'. Verify UO_EVIDENCE_SOURCE_TOKEN read access."
+              else
+                error_type="checkout_preflight_failed"
+                error_message="Unable to validate source ref '${effective_ref}' in repo '${repo}' via GitHub API (status=${ref_check_status})."
+              fi
+              rm -f "${ref_resp_file}"
             fi
           fi
+
+          echo "Source selection: repo='${repo}' cross_repo='${cross_repo}' ref='${effective_ref:-<unset>}' origin='${ref_origin:-<unset>}' mode='${ref_mode}' release_lane='${release_lane}' token_present='${token_present:-false}' repo_endpoint_status='${repo_endpoint_status:-not_checked}' ref_check_status='${ref_check_status:-not_checked}'"
 
           echo "preflight_ok=${preflight_ok}" >> "$GITHUB_OUTPUT"
           echo "error_type=${error_type}" >> "$GITHUB_OUTPUT"
@@ -176,6 +212,9 @@ jobs:
           echo "ref_mode=${ref_mode}" >> "$GITHUB_OUTPUT"
           echo "cross_repo=${cross_repo}" >> "$GITHUB_OUTPUT"
           echo "ref_origin=${ref_origin}" >> "$GITHUB_OUTPUT"
+          echo "token_present=${token_present:-false}" >> "$GITHUB_OUTPUT"
+          echo "repo_endpoint_status=${repo_endpoint_status:-not_checked}" >> "$GITHUB_OUTPUT"
+          echo "ref_check_status=${ref_check_status:-not_checked}" >> "$GITHUB_OUTPUT"
 
           if [[ "${preflight_ok}" == "true" ]]; then
             echo "Source preflight passed for ${repo}@${effective_ref} (mode=${ref_mode})."
