@@ -380,6 +380,7 @@ def validate_envelope_cohesion() -> None:
         "artifact_linkage_outcome": Path(_env("ARTIFACT_LINKAGE_OUTCOME_JSON")),
         "reason_codes_index": Path(_env("REASON_CODES_INDEX_JSON")),
         "policy_drift_outcome": Path(_env("POLICY_DRIFT_OUTCOME_JSON")),
+        "governance_dashboard": Path(_env("GOVERNANCE_DASHBOARD_JSON")),
     }
 
     envelope_mapping = {
@@ -390,6 +391,7 @@ def validate_envelope_cohesion() -> None:
         "artifact_linkage_outcome": "evidence/envelope-inputs/artifact-linkage-outcome-v1.json",
         "reason_codes_index": "evidence/envelope-inputs/reason-codes-index-v1.json",
         "policy_drift_outcome": "evidence/envelope-inputs/policy-drift-outcome-v1.json",
+        "governance_dashboard": "evidence/envelope-inputs/governance-dashboard-v1.json",
     }
 
     reasons: list[dict] = []

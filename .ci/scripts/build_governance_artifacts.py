@@ -273,6 +273,7 @@ def build_governance_summary() -> None:
         "policy_drift_outcome": Path(_env("POLICY_DRIFT_OUTCOME_JSON")),
         "envelope_cohesion_outcome": Path(_env("ENVELOPE_COHESION_OUTCOME_JSON")),
         "determinism_outcome": Path(_env("DETERMINISM_OUTCOME_JSON")),
+        "governance_dashboard": Path(_env("GOVERNANCE_DASHBOARD_JSON")),
     }
 
     artifacts = []
@@ -447,6 +448,7 @@ def sign_governance_artifacts() -> None:
         Path(_env("DETERMINISM_OUTCOME_JSON")),
         Path(_env("GOVERNANCE_SUMMARY_JSON")),
         Path(_env("GOVERNANCE_TRENDS_JSON")),
+        Path(_env("GOVERNANCE_DASHBOARD_JSON")),
     ]
 
     entries = []
@@ -524,6 +526,114 @@ def validate_tamper_evidence() -> None:
         print("::notice::[TAMPER] All governance artifacts verified — no tampering detected.")
 
 
+
+# ---------------------------------------------------------------------------
+# 8. Build governance dashboard artifact (Phase-2 Slice 3)
+# ---------------------------------------------------------------------------
+
+def build_governance_dashboard() -> None:
+    """Produce governance-dashboard-v1.json with trend deltas and verdict history."""
+    release = _release_lane()
+    lane = _lane_label()
+    out_path = Path(_env("GOVERNANCE_DASHBOARD_JSON"))
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    summary_path = Path(_env("GOVERNANCE_SUMMARY_JSON"))
+    trends_path = Path(_env("GOVERNANCE_TRENDS_JSON"))
+
+    # --- load governance summary ---
+    summary: dict = {}
+    if summary_path.is_file():
+        try:
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+
+    verdict = str(summary.get("verdict", "unknown")).strip().lower()
+    gate_results: dict = summary.get("gate_results", {})
+    artifacts: list = summary.get("artifacts", [])
+    reason_count: int = int(summary.get("reason_count", 0))
+
+    # --- load governance trends ---
+    trends: dict = {}
+    if trends_path.is_file():
+        try:
+            trends = json.loads(trends_path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+
+    runs: list[dict] = trends.get("runs", [])
+    current_run: dict = runs[0] if runs else {}
+
+    # --- verdict history (from available trend runs) ---
+    verdict_history: list[dict] = []
+    for run in runs:
+        verdict_history.append({
+            "run_id": str(run.get("run_id", "")),
+            "run_attempt": str(run.get("run_attempt", "")),
+            "commit_sha": str(run.get("commit_sha", "")),
+            "verdict": str(run.get("verdict", "unknown")),
+            "timestamp": str(run.get("timestamp", "")),
+        })
+    verdict_history.sort(key=lambda v: (v.get("timestamp", ""), v.get("run_id", "")))
+
+    # --- trend deltas (current vs previous if available) ---
+    current_severity = current_run.get("reason_counts_by_severity", {}) if current_run else {}
+    # With baseline mode there's no previous run; deltas are identity
+    previous_severity: dict = {}
+    if len(runs) > 1:
+        previous_severity = runs[1].get("reason_counts_by_severity", {})
+
+    def _delta(key: str) -> dict:
+        cur = int(current_severity.get(key, 0))
+        prev = int(previous_severity.get(key, 0)) if previous_severity else cur
+        return {"current": cur, "previous": prev, "delta": cur - prev}
+
+    trend_deltas = {
+        "error": _delta("error"),
+        "warning": _delta("warning"),
+        "notice": _delta("notice"),
+    }
+
+    # --- artifact inventory summary ---
+    artifact_count = len(artifacts)
+    artifacts_present = sum(1 for a in artifacts if a.get("exists"))
+    artifacts_missing = artifact_count - artifacts_present
+
+    # --- gate results breakdown ---
+    gate_breakdown: dict[str, str] = {}
+    for source in sorted(gate_results):
+        gate_breakdown[source] = str(gate_results[source])
+
+    # --- assemble dashboard ---
+    payload = {
+        "schema_version": "governance-dashboard-v1",
+        "timestamp": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "lane": lane,
+        "lane_context": {
+            "release_controlled": release,
+            "ref": _env("GH_REF"),
+            "sha": _env("GH_SHA"),
+            "run_id": _env("GH_RUN_ID"),
+            "run_attempt": _env("GH_RUN_ATTEMPT"),
+        },
+        "verdict": verdict,
+        "reason_count": reason_count,
+        "trend_deltas": trend_deltas,
+        "verdict_history": verdict_history,
+        "gate_results": gate_breakdown,
+        "artifact_inventory": {
+            "total": artifact_count,
+            "present": artifacts_present,
+            "missing": artifacts_missing,
+        },
+    }
+
+    out_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    print(f"wrote governance dashboard: {out_path} verdict={verdict}")
+
+
+
 # ---------------------------------------------------------------------------
 # CLI dispatcher
 # ---------------------------------------------------------------------------
@@ -536,6 +646,7 @@ COMMANDS = {
     "build-governance-trends": build_governance_trends,
     "sign-governance-artifacts": sign_governance_artifacts,
     "validate-tamper-evidence": validate_tamper_evidence,
+    "build-governance-dashboard": build_governance_dashboard,
     "all-build": None,   # build all artifacts in order
     "all-sign": None,    # sign + tamper validate
 }
@@ -554,6 +665,7 @@ def main() -> None:
         build_reason_code_index()
         build_governance_summary()
         build_governance_trends()
+        build_governance_dashboard()
     elif args.command == "all-sign":
         sign_governance_artifacts()
         validate_tamper_evidence()
@@ -563,4 +675,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

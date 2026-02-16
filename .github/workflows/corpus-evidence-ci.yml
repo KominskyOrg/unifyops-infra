@@ -38,6 +38,7 @@ jobs:
       GOVERNANCE_SUMMARY_JSON: evidence/validator/test-output/governance-summary-v1.json
       GOVERNANCE_TRENDS_JSON: evidence/validator/test-output/governance-trends-v1.json
       ARTIFACT_SIGNATURES_JSON: evidence/validator/test-output/artifact-signatures-v1.json
+      GOVERNANCE_DASHBOARD_JSON: evidence/validator/test-output/governance-dashboard-v1.json
       # Release-controlled lanes: tag pipelines by default.
       RELEASE_CONTROLLED_LANE: ${{ startsWith(github.ref, 'refs/tags/') && 'true' || 'false' }}
       # Temporary rollout toggle (disabled by default).
@@ -710,6 +711,14 @@ jobs:
           GH_SHA: ${{ github.sha }}
           GH_REF: ${{ github.ref }}
         run: python3 .ci/scripts/build_governance_artifacts.py build-governance-trends
+      - name: Build governance dashboard artifact
+        if: always()
+        env:
+          GH_RUN_ID: ${{ github.run_id }}
+          GH_RUN_ATTEMPT: ${{ github.run_attempt }}
+          GH_SHA: ${{ github.sha }}
+          GH_REF: ${{ github.ref }}
+        run: python3 .ci/scripts/build_governance_artifacts.py build-governance-dashboard
       - name: Sign governance artifacts (HMAC-SHA256)
         id: artifact_signing
         if: always()
@@ -743,6 +752,7 @@ jobs:
             ${{ env.GOVERNANCE_SUMMARY_JSON }}
             ${{ env.GOVERNANCE_TRENDS_JSON }}
             ${{ env.ARTIFACT_SIGNATURES_JSON }}
+            ${{ env.GOVERNANCE_DASHBOARD_JSON }}
 
       - name: Upload corpus summary artifact
         uses: actions/upload-artifact@v4
@@ -809,7 +819,9 @@ jobs:
           fi
           if [[ -f "${ARTIFACT_SIGNATURES_JSON}" ]]; then
             cp "${ARTIFACT_SIGNATURES_JSON}" evidence/envelope-inputs/
-
+          fi
+          if [[ -f "${GOVERNANCE_DASHBOARD_JSON}" ]]; then
+            cp "${GOVERNANCE_DASHBOARD_JSON}" evidence/envelope-inputs/
           fi
           if [[ -n "${{ steps.lockfile_digest.outputs.lockfile_path }}" && -f "${{ steps.lockfile_digest.outputs.lockfile_path }}" ]]; then
             mkdir -p evidence/envelope-inputs/lockfiles
