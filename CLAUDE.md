@@ -129,9 +129,9 @@ unifyops-infra/
 │   └── unifyops-home/
 │       ├── apps/                 # ArgoCD Application definitions
 │       │   ├── root-apps.yaml    # App-of-apps pattern root
-│       │   ├── appset-unifyops.yaml  # ApplicationSet for multi-env deployment
+│       │   ├── appset-auth.yaml  # ApplicationSet: auth stack (dev/staging/prod)
+│       │   ├── appset-user.yaml  # ApplicationSet: user stack (dev/staging/prod)
 │       │   ├── argocd/           # ArgoCD UI/ingress config
-│       │   ├── auth/             # Auth stack applications
 │       │   ├── cert-manager/     # TLS certificate management
 │       │   ├── external-dns/     # Automatic DNS management
 │       │   ├── github-runner/    # arc-runners GitHub Actions runners
@@ -318,8 +318,9 @@ Projects define RBAC and resource boundaries:
    # For infrastructure component
    clusters/unifyops-home/apps/myapp/app.yaml
 
-   # For UnifyOps stack application
-   clusters/unifyops-home/apps/auth/  # Example structure
+   # For UnifyOps stack application: add values files under
+   clusters/unifyops-home/apps/unifyops/<domain>/<stack>/<stack>-<type>/
+   # and an ApplicationSet appset-<stack>.yaml (see appset-auth.yaml)
    ```
 
 2. **Define ArgoCD Application**:
@@ -461,10 +462,10 @@ helm push my-chart-1.0.0.tgz oci://harbor.unifyops.io/library
   - Automatically syncs new applications
   - Located in `infra` project
 
-- `clusters/unifyops-home/apps/appset-unifyops.yaml`: Multi-environment ApplicationSet
-  - Generates applications for dev/staging/prod
-  - Maps branches to namespaces
-  - Uses overlay pattern for environment-specific config
+- `clusters/unifyops-home/apps/appset-auth.yaml` / `appset-user.yaml`: Multi-environment ApplicationSets
+  - Generate one Application per env × appType (dev/staging/prod × service/api/app)
+  - Map branches to namespaces (dev→uo-dev, staging→uo-staging, main→uo-prod)
+  - Multi-source: unifyops-stack OCI chart from Harbor + values from this repo
 
 ### Project Definitions
 

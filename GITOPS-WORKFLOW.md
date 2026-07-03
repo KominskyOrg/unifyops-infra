@@ -87,8 +87,7 @@ clusters/
 └── unifyops-home/
     └── apps/
         ├── appset-auth.yaml      # ApplicationSet for auth stack
-        ├── appset-user.yaml      # ApplicationSet for user stack
-        └── appset-unifyops.yaml  # Legacy ApplicationSet
+        └── appset-user.yaml      # ApplicationSet for user stack
 ```
 
 ## ArgoCD ApplicationSet Configuration
