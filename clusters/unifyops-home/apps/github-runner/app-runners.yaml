@@ -27,14 +27,20 @@ spec:
         containerMode:
           type: "dind"
 
-        # Custom runner image from Harbor registry
+        # TEMPORARY BOOTSTRAP (UO-P0): upstream runner image while the
+        # hardened Harbor image is rebuilt by CI. v1.8 bundles runner
+        # 2.329.0, which GitHub deprecated ("cannot receive messages"),
+        # and pushing the rebuilt image requires a working runner.
+        # Revert to harbor.unifyops.io/library/arc-runner-unifyops:v1.9
+        # once the build-runner-image workflow has pushed it.
         template:
           spec:
             containers:
             - name: runner
-              image: harbor.unifyops.io/library/arc-runner-unifyops:v1.8
+              image: ghcr.io/actions/actions-runner:latest
               imagePullPolicy: Always
-            # Harbor registry credentials
+              command: ["/home/runner/run.sh"]
+            # Harbor registry credentials (kept for the v1.9 revert)
             imagePullSecrets:
             - name: harbor-registry-secret
   destination:

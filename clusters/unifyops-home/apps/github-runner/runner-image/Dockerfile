@@ -49,7 +49,7 @@
         apt-get update && \
         apt-get install -y --no-install-recommends \
             ca-certificates \
-            curl=7.* \
+            curl=8.* \
             git=1:2.* \
             jq=1.* \
             tar \
