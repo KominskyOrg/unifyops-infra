@@ -1,0 +1,16 @@
+# Daily Longhorn snapshots for all volumes (UO-P0-05).
+# The "default" group applies this job to every volume that has no
+# explicit recurring-job assignment. 14 snapshots retained (~2 weeks).
+apiVersion: longhorn.io/v1beta2
+kind: RecurringJob
+metadata:
+  name: daily-snapshot
+  namespace: longhorn-system
+spec:
+  name: daily-snapshot
+  task: snapshot
+  cron: "0 3 * * *"
+  retain: 14
+  concurrency: 2
+  groups:
+    - default
