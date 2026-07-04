@@ -47,9 +47,15 @@ kubectl wait --for=condition=complete job/manual-dump-<ts> -n uo-dev --timeout=1
    port-forward) and a login round-trip.
 
 ### 1.1 Rehearsal record
-- 2026-07-04: dev rehearsal executed against `auth_db` in `uo-dev` —
-  ad-hoc dump job → restore into the live release via `psql -f` →
-  auth-service healthy afterwards. See PR trail for UO-P0-05.
+- 2026-07-04: full cycle rehearsed in `uo-dev` — ad-hoc dump job →
+  helper pod mounting the backup PVC → dump restored into a **throwaway
+  Postgres instance inside the pod** (initdb + `psql -f`): `auth_db`
+  recreated with `auth.users` (16 rows) and `alembic_version` intact.
+  Rehearsals restore into a throwaway instance to avoid touching live
+  data; §1 step 2's live restore is for real incidents only.
+  Bitnami-image note: run initdb/pg_ctl with the bundled nss_wrapper
+  (`LD_PRELOAD=/opt/bitnami/common/lib/libnss_wrapper.so` +
+  `NSS_WRAPPER_PASSWD`/`NSS_WRAPPER_GROUP` mapping uid 1001).
 
 ## 2. Longhorn — volume snapshots
 
