@@ -148,6 +148,20 @@ secrets:
 # PostgreSQL subchart (only deployed when appType=service and database.enabled=true)
 postgresql:
   enabled: true
+  # Logical dumps (UO-P0-05): daily pg_dumpall to a Longhorn PVC,
+  # 14-day retention enforced by the trailing find -delete.
+  backup:
+    enabled: true
+    cronjob:
+      schedule: "@daily"
+      concurrencyPolicy: Forbid
+      command:
+        - /bin/sh
+        - -c
+        - "pg_dumpall --clean --if-exists --load-via-partition-root --quote-all-identifiers --no-password --file=${PGDUMP_DIR}/pg_dumpall-$(date '+%Y-%m-%d-%H-%M').pgdump && find ${PGDUMP_DIR} -type f -name '*.pgdump' -mtime +14 -delete"
+      storage:
+        storageClass: longhorn
+        size: 2Gi
   # Image will use global Harbor registry - run mirror-bitnami-images.sh to populate Harbor
   image:
     repository: bitnami/postgresql
