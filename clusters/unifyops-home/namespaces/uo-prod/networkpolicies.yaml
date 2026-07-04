@@ -36,3 +36,27 @@ spec:
         - namespaceSelector:
             matchLabels:
               name: ingress # if you dedicate an ingress ns
+---
+# DNS egress for all pods (UO-P0-05): jobs like the pg_dumpall backup
+# CronJob match no per-app policy and could not resolve service names.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: uo-prod
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
