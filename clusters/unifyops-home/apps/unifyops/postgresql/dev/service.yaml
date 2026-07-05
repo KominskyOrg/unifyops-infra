@@ -1,0 +1,37 @@
+# Stable DNS name services use: unifyops-postgresql.uo-dev.svc (or just
+# unifyops-postgresql from inside the namespace).
+apiVersion: v1
+kind: Service
+metadata:
+  name: unifyops-postgresql
+  namespace: uo-dev
+  labels:
+    app: unifyops-postgresql
+spec:
+  type: ClusterIP
+  ports:
+    - name: tcp-postgresql
+      port: 5432
+      targetPort: tcp-postgresql
+      protocol: TCP
+  selector:
+    app: unifyops-postgresql
+---
+# Headless service backing the StatefulSet's stable pod identity.
+apiVersion: v1
+kind: Service
+metadata:
+  name: unifyops-postgresql-hl
+  namespace: uo-dev
+  labels:
+    app: unifyops-postgresql
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  ports:
+    - name: tcp-postgresql
+      port: 5432
+      targetPort: tcp-postgresql
+      protocol: TCP
+  selector:
+    app: unifyops-postgresql

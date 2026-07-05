@@ -1,0 +1,89 @@
+# Logical dumps for the shared instance, mirroring the UO-P0-05 pattern used by
+# the per-service databases: daily pg_dumpall to a Longhorn PVC, 14-day
+# retention enforced by the trailing find -delete.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: unifyops-postgresql-pgdumpall
+  namespace: uo-dev
+  labels:
+    app: unifyops-postgresql
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: unifyops-postgresql-pgdumpall
+  namespace: uo-dev
+  labels:
+    app: unifyops-postgresql
+spec:
+  schedule: "@daily"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: unifyops-postgresql
+        spec:
+          restartPolicy: OnFailure
+          securityContext:
+            fsGroup: 1001
+          containers:
+            - name: pgdumpall
+              image: harbor.unifyops.io/library/bitnami/postgresql:16.4.0-debian-12-r13
+              imagePullPolicy: IfNotPresent
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                runAsNonRoot: true
+                runAsUser: 1001
+                seccompProfile:
+                  type: RuntimeDefault
+              command:
+                - /bin/sh
+                - -c
+                - >-
+                  pg_dumpall --clean --if-exists --load-via-partition-root
+                  --quote-all-identifiers --no-password
+                  --file=${PGDUMP_DIR}/pg_dumpall-$(date '+%Y-%m-%d-%H-%M').pgdump
+                  && find ${PGDUMP_DIR} -type f -name '*.pgdump' -mtime +14 -delete
+              env:
+                - name: PGDUMP_DIR
+                  value: /backup/pgdumpall
+                - name: PGHOST
+                  value: unifyops-postgresql
+                - name: PGPORT
+                  value: "5432"
+                - name: PGUSER
+                  value: postgres
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: unifyops-postgresql-secret
+                      key: postgres-password
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: 500m
+                  memory: 256Mi
+              volumeMounts:
+                - name: dumps
+                  mountPath: /backup/pgdumpall
+          volumes:
+            - name: dumps
+              persistentVolumeClaim:
+                claimName: unifyops-postgresql-pgdumpall
