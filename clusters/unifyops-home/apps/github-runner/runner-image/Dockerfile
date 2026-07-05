@@ -73,7 +73,10 @@
     # --------------------------------------------------------------------
     # Install helm
     # --------------------------------------------------------------------
-    RUN curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" -o /tmp/helm.tar.gz && \
+    # get.helm.sh (Fastly) resets long transfers from this cluster; retry with
+    # resume so partial downloads complete. sha256sum still guards integrity.
+    RUN curl -fSL --retry 8 --retry-delay 5 --retry-all-errors --continue-at - \
+            "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" -o /tmp/helm.tar.gz && \
         echo "${HELM_SHA256}  /tmp/helm.tar.gz" | sha256sum -c - && \
         tar -zxf /tmp/helm.tar.gz -C /tmp && \
         install -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm && \
