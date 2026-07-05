@@ -1,0 +1,49 @@
+# UO-P1-01: one shared PostgreSQL per environment (plan §2.4 / §5.3).
+# Raw manifests live at apps/unifyops/postgresql/{env}/ on the matching env
+# branch. Dev only for now; staging joins when Phase 1 promotes, prod in
+# Phase 9.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: unifyops-postgresql
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - env: "dev"
+            branch: "dev"
+            namespace: "uo-dev"
+          # - env: "staging"
+          #   branch: "staging"
+          #   namespace: "uo-staging"
+          # prod (branch: main, namespace: uo-prod) lands in Phase 9
+  template:
+    metadata:
+      name: '{{env}}-unifyops-postgresql'
+      labels:
+        stack: postgresql
+        environment: '{{env}}'
+    spec:
+      project: apps
+      source:
+        repoURL: https://github.com/KominskyOrg/unifyops-infra.git
+        targetRevision: '{{branch}}'
+        path: 'clusters/unifyops-home/apps/unifyops/postgresql/{{env}}'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      syncPolicy:
+        automated:
+          # No prune on a database app: a bad commit must not delete the
+          # StatefulSet/PVC. Stale objects get cleaned up manually.
+          prune: false
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 3m
