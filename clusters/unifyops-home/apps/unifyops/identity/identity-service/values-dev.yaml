@@ -55,12 +55,14 @@ resources:
   limits:
     cpu: 500m
     memory: 512Mi
-# Health checks
+# Health checks. Readiness includes a real DB connectivity check
+# (UO-P1-06, endpoint exists from the UO-P1-06 image onward); liveness
+# stays process-level on /health.
 probes:
   readiness:
     enabled: true
     httpGet:
-      path: "/{{ .Values.stack.appType }}/{{ .Values.stack.name }}/health"
+      path: "/{{ .Values.stack.appType }}/{{ .Values.stack.name }}/health/ready"
       port: 8001
     initialDelaySeconds: 10
     periodSeconds: 10
