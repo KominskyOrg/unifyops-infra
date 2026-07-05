@@ -18,7 +18,7 @@ replicaCount: 1
 # Image configuration
 image:
   repository: "user-app"
-  tag: "dev-latest" # Updated by CI/CD workflow
+  tag: "ead0bf0e2b6ea274a3b149bd06d963ba71733839" # Updated by CI/CD workflow
   pullPolicy: Always # Use Always for latest tag in dev
 # Service configuration
 service:
