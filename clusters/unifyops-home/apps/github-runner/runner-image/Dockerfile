@@ -31,7 +31,7 @@
     
     ARG YQ_SHA256=0d6aaf1cf44a8d18fbc7ed0ef14f735a8df8d2e314c4cc0f0242d35c0a440c95
     ARG KUBECTL_SHA256=69ab3a931e826bf7ac14d38ba7ca637d66a6fcb1ca0e3333a2cafdf15482af9f
-    ARG HELM_SHA256=f43e1c3387de24547506ab05d24e5309c0ce0b228c23bd8aa64e9ec4b8206651
+    # helm comes from the digest-pinned alpine/helm image (see below), not get.helm.sh
     
     # --------------------------------------------------------------------
     # Environment configuration
@@ -73,14 +73,13 @@
     # --------------------------------------------------------------------
     # Install helm
     # --------------------------------------------------------------------
-    # get.helm.sh (Fastly) resets long transfers from this cluster; retry with
-    # resume so partial downloads complete. sha256sum still guards integrity.
-    RUN curl -fSL --retry 8 --retry-delay 5 --retry-all-errors --continue-at - \
-            "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" -o /tmp/helm.tar.gz && \
-        echo "${HELM_SHA256}  /tmp/helm.tar.gz" | sha256sum -c - && \
-        tar -zxf /tmp/helm.tar.gz -C /tmp && \
-        install -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm && \
-        rm -rf /tmp/helm.tar.gz /tmp/linux-amd64
+    # get.helm.sh (Fastly) hard-resets large transfers from this cluster
+    # (8 retries with resume all reset — runs 28745978239/28746282690/28746475021),
+    # so take the binary from the official alpine/helm image on Docker Hub,
+    # pinned by digest for integrity. Digest is for tag 3.14.0 (= HELM_VERSION).
+    COPY --from=alpine/helm:3.14.0@sha256:a90798c9c2b671e3546b10db1ae0b845f9abccc9f9ff79b34744a1ba146b67ed \
+        /usr/bin/helm /usr/local/bin/helm
+    RUN helm version --short
     
     # --------------------------------------------------------------------
     # Security Hardening
