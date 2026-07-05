@@ -20,6 +20,7 @@ resources:
   - appset-user.yaml
   - appset-postgresql.yaml
   - appset-identity-service.yaml
+  - appset-secrets.yaml
 
   # Each subdir has its own kustomization.yaml
   - argocd/
