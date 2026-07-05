@@ -1,0 +1,55 @@
+# UO-P1-03: the merged identity-service (auth-service + user-service).
+# Dev only during the Phase 1 transition; staging/prod join when the slice
+# is proven and the old services are retired (UO-P1-10). Single appType —
+# the identity stack has no api/app tier; gateways stay auth-api/user-api
+# until the platform-api consolidation (Phase 1 later slices / Phase 3).
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: identity-service
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - env: "dev"
+            branch: "dev"
+            namespace: "uo-dev"
+          # - env: "staging"
+          #   branch: "staging"
+          #   namespace: "uo-staging"
+          # prod (branch: main, namespace: uo-prod) in Phase 9
+  template:
+    metadata:
+      name: '{{env}}-identity-service'
+      labels:
+        stack: identity
+        appType: service
+        environment: '{{env}}'
+    spec:
+      project: apps
+      sources:
+        - repoURL: oci://harbor.unifyops.io/library/unifyops-stack
+          chart: unifyops-stack
+          targetRevision: "0.1.17"
+          helm:
+            valueFiles:
+              - $values/clusters/unifyops-home/apps/unifyops/identity/identity-service/values-{{env}}.yaml
+        - repoURL: https://github.com/KominskyOrg/unifyops-infra.git
+          targetRevision: '{{branch}}'
+          ref: values
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 3m
