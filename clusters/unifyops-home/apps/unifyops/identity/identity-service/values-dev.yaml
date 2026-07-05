@@ -1,0 +1,140 @@
+# identity-service — dev values (UO-P1-03).
+# The merged auth+user service. Runs against the SHARED per-environment
+# PostgreSQL (unifyops-postgresql, UO-P1-01), identity schema; no
+# per-service postgresql subchart. Requires unifyops-stack >= 0.1.17
+# (database.host/existingSecret overrides for the migration job and
+# wait-for-database init containers).
+
+# Global configuration
+global:
+  namespace: "uo-dev"
+  imageRegistry: "harbor.unifyops.io/library"
+  imagePullSecrets:
+    - name: harbor-registry
+# Stack configuration - This drives everything
+stack:
+  name: identity
+  appType: service
+enabled: true
+replicaCount: 1
+# Image configuration
+image:
+  repository: "identity-service"
+  tag: "bootstrap" # Updated by CI/CD workflow on the first dev build
+  pullPolicy: IfNotPresent # SHA tags are immutable, no need to always pull
+# Service configuration
+service:
+  type: ClusterIP
+  port: 8001
+  targetPort: 8001
+  annotations: {}
+# Configuration (adapts based on appType)
+config:
+  apiPort: "8001"
+  environment: "development"
+  databaseSchema: "identity"
+  skipMigrations: "true" # Migrations run via the chart migration Job only
+  logStyle: "otel"
+  enableOtelLogging: "true"
+  logLevel: "info"
+# Database configuration — shared instance, no subchart
+database:
+  enabled: true
+  # Used by the migration job / wait-for-database init containers (chart >= 0.1.17)
+  host: "unifyops-postgresql"
+  dbName: "unifyops"
+  existingSecret: "unifyops-postgresql-secret"
+  url: "postgresql://postgres:${DB_PASSWORD}@unifyops-postgresql:5432/unifyops"
+  external:
+    enabled: false
+# Resource limits
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+# Health checks
+probes:
+  readiness:
+    enabled: true
+    httpGet:
+      path: "/{{ .Values.stack.appType }}/{{ .Values.stack.name }}/health"
+      port: 8001
+    initialDelaySeconds: 10
+    periodSeconds: 10
+  liveness:
+    enabled: true
+    httpGet:
+      path: "/{{ .Values.stack.appType }}/{{ .Values.stack.name }}/health"
+      port: 8001
+    initialDelaySeconds: 30
+    periodSeconds: 20
+# Autoscaling
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+# Observability (only works for api/service appTypes)
+observability:
+  enabled: false
+# Additional environment variables
+env:
+  - name: DB_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: unifyops-postgresql-secret
+        key: postgres-password
+  - name: DATABASE_URL
+    value: "postgresql://postgres:$(DB_PASSWORD)@unifyops-postgresql:5432/unifyops"
+# Placement
+nodeSelector: {}
+tolerations: []
+affinity: {}
+# Ingress (services don't need ingress)
+ingress:
+  enabled: false
+  className: "nginx-private"
+  annotations: {}
+  hosts:
+    - host: dev.unifyops.io
+      paths:
+        - path: "/{{ .Values.stack.appType }}/{{ .Values.stack.name }}"
+          pathType: Prefix
+  tls: []
+# Secrets (JWT signing key — same key the old auth-service uses so tokens
+# stay mutually verifiable during the transition)
+secrets:
+  existingSecret: "auth-jwt-secret"
+  existingSecretJwtKey: "jwt-secret"
+# No per-service PostgreSQL subchart: shared instance (UO-P1-01)
+postgresql:
+  enabled: false
+# Network policies
+networkPolicy:
+  enabled: true
+  defaultDeny:
+    ingress: true
+    egress: true
+# ServiceAccount
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+# Pod Security contexts
+podSecurityContext:
+  fsGroup: 1000
+  runAsNonRoot: true
+  runAsUser: 1000
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+# Common labels
+commonLabels: {}
