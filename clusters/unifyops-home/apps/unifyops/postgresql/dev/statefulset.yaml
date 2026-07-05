@@ -1,0 +1,147 @@
+# UO-P1-01: one shared PostgreSQL instance for the uo-dev environment.
+# Replaces the per-service Bitnami subchart pattern (auth-service-postgresql /
+# user-service-postgresql stay up during the Phase 1 transition; retired in UO-P1-10).
+# Database `unifyops` carries the `identity` and `platform` schemas (plan §2.4).
+# Image is the Harbor-hosted copy of the exact tag the existing instances run.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: unifyops-postgresql
+  namespace: uo-dev
+  labels:
+    app: unifyops-postgresql
+spec:
+  replicas: 1
+  serviceName: unifyops-postgresql-hl
+  selector:
+    matchLabels:
+      app: unifyops-postgresql
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: unifyops-postgresql
+    spec:
+      securityContext:
+        fsGroup: 1001
+      initContainers:
+        # Longhorn volumes come up root-owned; the Bitnami image runs as 1001.
+        - name: volume-permissions
+          image: busybox:1.35
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - chown -R 1001:1001 /bitnami/postgresql && chmod -R 755 /bitnami/postgresql
+          securityContext:
+            runAsUser: 0
+          volumeMounts:
+            - name: data
+              mountPath: /bitnami/postgresql
+      containers:
+        - name: postgresql
+          image: harbor.unifyops.io/library/bitnami/postgresql:16.4.0-debian-12-r13
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsGroup: 0
+            runAsNonRoot: true
+            runAsUser: 1001
+            seccompProfile:
+              type: RuntimeDefault
+          env:
+            - name: BITNAMI_DEBUG
+              value: "false"
+            - name: POSTGRESQL_PORT_NUMBER
+              value: "5432"
+            - name: POSTGRESQL_VOLUME_DIR
+              value: /bitnami/postgresql
+            - name: PGDATA
+              value: /bitnami/postgresql/data
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: unifyops-postgresql-secret
+                  key: postgres-password
+            - name: POSTGRES_DATABASE
+              value: unifyops
+            - name: POSTGRESQL_ENABLE_LDAP
+              value: "no"
+            - name: POSTGRESQL_ENABLE_TLS
+              value: "no"
+            - name: POSTGRESQL_LOG_HOSTNAME
+              value: "false"
+            - name: POSTGRESQL_LOG_CONNECTIONS
+              value: "false"
+            - name: POSTGRESQL_LOG_DISCONNECTIONS
+              value: "false"
+            - name: POSTGRESQL_PGAUDIT_LOG_CATALOG
+              value: "off"
+            - name: POSTGRESQL_CLIENT_MIN_MESSAGES
+              value: error
+            - name: POSTGRESQL_SHARED_PRELOAD_LIBRARIES
+              value: pgaudit
+          ports:
+            - name: tcp-postgresql
+              containerPort: 5432
+              protocol: TCP
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - exec pg_isready -U "postgres" -d "dbname=unifyops" -h 127.0.0.1 -p 5432
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+            successThreshold: 1
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - -e
+                - |
+                  exec pg_isready -U "postgres" -d "dbname=unifyops" -h 127.0.0.1 -p 5432
+                  [ -f /opt/bitnami/postgresql/tmp/.initialized ] || [ -f /bitnami/postgresql/.initialized ]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+            successThreshold: 1
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          volumeMounts:
+            - name: custom-init-scripts
+              mountPath: /docker-entrypoint-initdb.d/
+            - name: dshm
+              mountPath: /dev/shm
+            - name: data
+              mountPath: /bitnami/postgresql
+      volumes:
+        - name: custom-init-scripts
+          configMap:
+            name: unifyops-postgresql-init-scripts
+        - name: dshm
+          emptyDir:
+            medium: Memory
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: longhorn
+        resources:
+          requests:
+            storage: 10Gi

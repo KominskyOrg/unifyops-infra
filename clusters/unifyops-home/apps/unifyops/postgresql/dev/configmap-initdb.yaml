@@ -1,0 +1,17 @@
+# First-boot init: create the two schemas (plan §2.4). Runs only when the data
+# volume is empty; the identity-service Alembic baseline also does
+# CREATE SCHEMA IF NOT EXISTS, so a pre-existing volume is not a problem.
+# Everything runs as the postgres superuser for now, matching the existing
+# per-service instances; dedicated per-schema roles are later hardening.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: unifyops-postgresql-init-scripts
+  namespace: uo-dev
+  labels:
+    app: unifyops-postgresql
+data:
+  00-schemas.sql: |
+    \connect unifyops
+    CREATE SCHEMA IF NOT EXISTS identity;
+    CREATE SCHEMA IF NOT EXISTS platform;
