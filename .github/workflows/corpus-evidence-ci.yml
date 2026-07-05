@@ -36,6 +36,12 @@ jobs:
       ENVELOPE_COHESION_OUTCOME_JSON: evidence/validator/test-output/envelope-cohesion-outcome-v1.json
       DETERMINISM_OUTCOME_JSON: evidence/validator/test-output/determinism-outcome-v1.json
       GOVERNANCE_SUMMARY_JSON: evidence/validator/test-output/governance-summary-v1.json
+      GOVERNANCE_TRENDS_JSON: evidence/validator/test-output/governance-trends-v1.json
+      ARTIFACT_SIGNATURES_JSON: evidence/validator/test-output/artifact-signatures-v1.json
+      GOVERNANCE_DASHBOARD_JSON: evidence/validator/test-output/governance-dashboard-v1.json
+      GOVERNANCE_TRENDS_PRIOR_DIR: evidence/validator/test-output/prior-trends
+      GOVERNANCE_TRENDS_MAX_RUNS: ${{ vars.GOVERNANCE_TRENDS_MAX_RUNS || '20' }}
+      GOVERNANCE_TRENDS_LOOKBACK_RUNS: ${{ vars.GOVERNANCE_TRENDS_LOOKBACK_RUNS || '5' }}
       # Release-controlled lanes: tag pipelines by default.
       RELEASE_CONTROLLED_LANE: ${{ startsWith(github.ref, 'refs/tags/') && 'true' || 'false' }}
       # Temporary rollout toggle (disabled by default).
@@ -70,167 +76,7 @@ jobs:
           INPUT_SOURCE_REF: ${{ inputs.UO_EVIDENCE_CORPUS_SOURCE_REF || '' }}
           VAR_SOURCE_REF: ${{ vars.UO_EVIDENCE_CORPUS_SOURCE_REF || '' }}
           VAR_DEFAULT_REF: ${{ vars.UO_EVIDENCE_CORPUS_DEFAULT_REF || '' }}
-        run: |
-          set -euo pipefail
-          repo="${UO_EVIDENCE_CORPUS_SOURCE_REPO}"
-          input_source_ref="${INPUT_SOURCE_REF}"
-          var_source_ref="${VAR_SOURCE_REF}"
-          var_default_ref="${VAR_DEFAULT_REF}"
-          default_ref="${UO_EVIDENCE_CORPUS_DEFAULT_REF:-e65ef29bc36ad65b641a903a6b23f488a95c3f3f}"
-          token="${UO_EVIDENCE_SOURCE_TOKEN:-}"
-          current_repo="${CURRENT_REPO}"
-          release_lane="${RELEASE_CONTROLLED_LANE,,}"
-
-          preflight_ok="false"
-          error_type=""
-          error_message=""
-          effective_ref=""
-          ref_mode="mutable"
-          cross_repo="false"
-          ref_origin=""
-
-          if [[ "${repo}" != "${current_repo}" ]]; then
-            cross_repo="true"
-          fi
-
-          if [[ -n "${input_source_ref}" ]]; then
-            effective_ref="${input_source_ref}"
-            ref_origin="input:UO_EVIDENCE_CORPUS_SOURCE_REF"
-          elif [[ -n "${var_source_ref}" ]]; then
-            effective_ref="${var_source_ref}"
-            ref_origin="repo_var:UO_EVIDENCE_CORPUS_SOURCE_REF"
-          elif [[ "${cross_repo}" == "true" ]]; then
-            effective_ref="${default_ref}"
-            if [[ -n "${var_default_ref}" ]]; then
-              ref_origin="repo_var:UO_EVIDENCE_CORPUS_DEFAULT_REF"
-            else
-              ref_origin="default_literal:e65ef29bc36ad65b641a903a6b23f488a95c3f3f"
-            fi
-          else
-            effective_ref="${CURRENT_SHA}"
-            ref_origin="same_repo_default:github.sha"
-          fi
-
-          if [[ -z "${effective_ref}" ]]; then
-            error_type="missing_ref"
-            if [[ "${cross_repo}" == "true" ]]; then
-              error_message="Unable to resolve cross-repo source ref. Set UO_EVIDENCE_CORPUS_SOURCE_REF input/repo var or define UO_EVIDENCE_CORPUS_DEFAULT_REF (stable branch/tag)."
-            else
-              error_message="Unable to resolve same-repo source ref from github.sha."
-            fi
-          fi
-
-          if [[ -z "${error_type}" ]]; then
-            if [[ "${effective_ref}" =~ ^refs/tags/.+ ]] || [[ "${effective_ref}" =~ ^[A-Fa-f0-9]{7,40}$ ]] || [[ "${effective_ref}" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([-.].*)?$ ]]; then
-              ref_mode="immutable"
-            fi
-
-            if [[ "${release_lane}" == "true" && "${ref_mode}" != "immutable" ]]; then
-              error_type="mutable_ref_disallowed"
-              error_message="Release-controlled lane requires immutable source ref (tag or commit SHA), got '${effective_ref}'."
-            elif [[ "${release_lane}" != "true" && "${ref_mode}" != "immutable" ]]; then
-              echo "::warning::Selected source ref '${effective_ref}' is mutable in a non-release lane. Prefer a tag or commit SHA for immutable provenance."
-            fi
-          fi
-
-          if [[ -z "${error_type}" && "${cross_repo}" == "true" && -z "${token}" ]]; then
-            error_type="missing_cross_repo_token"
-            error_message="Cross-repo source checkout requires secrets.UO_EVIDENCE_SOURCE_TOKEN with read access to '${repo}'."
-          fi
-
-          token_present="false"
-          repo_endpoint_status="not_checked"
-          ref_check_status="not_checked"
-          if [[ -n "${token}" ]]; then
-            token_present="true"
-          fi
-
-          if [[ -z "${error_type}" ]]; then
-            auth_args=(-H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28")
-            if [[ -n "${token}" ]]; then
-              auth_args+=(-H "Authorization: Bearer ${token}")
-            fi
-
-            api_base="https://api.github.com/repos/${repo}"
-            repo_resp_file="$(mktemp)"
-            set +e
-            repo_endpoint_status="$(curl -sS -L -o "${repo_resp_file}" -w '%{http_code}' "${auth_args[@]}" "${api_base}")"
-            curl_rc=$?
-            set -e
-
-            if [[ ${curl_rc} -ne 0 ]]; then
-              error_type="checkout_preflight_failed"
-              error_message="Unable to validate source repo '${repo}' via GitHub API (transport error)."
-            elif [[ "${repo_endpoint_status}" == "200" ]]; then
-              :
-            elif [[ "${repo_endpoint_status}" == "401" || "${repo_endpoint_status}" == "403" ]]; then
-              error_type="auth_denied"
-              error_message="Authentication denied for source repo '${repo}'. Verify UO_EVIDENCE_SOURCE_TOKEN read access."
-            elif [[ "${repo_endpoint_status}" == "404" ]]; then
-              error_type="repo_not_found"
-              error_message="Source repo '${repo}' was not found. Verify UO_EVIDENCE_CORPUS_SOURCE_REPO value."
-            else
-              error_type="checkout_preflight_failed"
-              error_message="Unable to validate source repo '${repo}' via GitHub API (status=${repo_endpoint_status})."
-            fi
-            rm -f "${repo_resp_file}"
-
-            if [[ -z "${error_type}" ]]; then
-              ref_endpoint=""
-              if [[ "${effective_ref}" =~ ^refs/tags/(.+)$ ]]; then
-                ref_endpoint="${api_base}/git/ref/tags/${BASH_REMATCH[1]}"
-              elif [[ "${effective_ref}" =~ ^[A-Fa-f0-9]{7,40}$ ]]; then
-                ref_endpoint="${api_base}/commits/${effective_ref}"
-              elif [[ "${effective_ref}" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([-.].*)?$ ]]; then
-                ref_endpoint="${api_base}/git/ref/tags/${effective_ref}"
-              else
-                ref_endpoint="${api_base}/git/ref/heads/${effective_ref}"
-              fi
-
-              ref_resp_file="$(mktemp)"
-              set +e
-              ref_check_status="$(curl -sS -L -o "${ref_resp_file}" -w '%{http_code}' "${auth_args[@]}" "${ref_endpoint}")"
-              curl_rc=$?
-              set -e
-
-              if [[ ${curl_rc} -ne 0 ]]; then
-                error_type="checkout_preflight_failed"
-                error_message="Unable to validate source ref '${effective_ref}' in repo '${repo}' via GitHub API (transport error)."
-              elif [[ "${ref_check_status}" == "200" ]]; then
-                preflight_ok="true"
-              elif [[ "${ref_check_status}" == "404" ]]; then
-                error_type="ref_missing"
-                error_message="Configured ref '${effective_ref}' was not found in source repo '${repo}'."
-              elif [[ "${ref_check_status}" == "401" || "${ref_check_status}" == "403" ]]; then
-                error_type="auth_denied"
-                error_message="Authentication denied for source repo '${repo}'. Verify UO_EVIDENCE_SOURCE_TOKEN read access."
-              else
-                error_type="checkout_preflight_failed"
-                error_message="Unable to validate source ref '${effective_ref}' in repo '${repo}' via GitHub API (status=${ref_check_status})."
-              fi
-              rm -f "${ref_resp_file}"
-            fi
-          fi
-
-          echo "Source selection: repo='${repo}' cross_repo='${cross_repo}' ref='${effective_ref:-<unset>}' origin='${ref_origin:-<unset>}' mode='${ref_mode}' release_lane='${release_lane}' token_present='${token_present:-false}' repo_endpoint_status='${repo_endpoint_status:-not_checked}' ref_check_status='${ref_check_status:-not_checked}'"
-
-          echo "preflight_ok=${preflight_ok}" >> "$GITHUB_OUTPUT"
-          echo "error_type=${error_type}" >> "$GITHUB_OUTPUT"
-          echo "error_message=${error_message}" >> "$GITHUB_OUTPUT"
-          echo "effective_ref=${effective_ref}" >> "$GITHUB_OUTPUT"
-          echo "ref_mode=${ref_mode}" >> "$GITHUB_OUTPUT"
-          echo "cross_repo=${cross_repo}" >> "$GITHUB_OUTPUT"
-          echo "ref_origin=${ref_origin}" >> "$GITHUB_OUTPUT"
-          echo "token_present=${token_present:-false}" >> "$GITHUB_OUTPUT"
-          echo "repo_endpoint_status=${repo_endpoint_status:-not_checked}" >> "$GITHUB_OUTPUT"
-          echo "ref_check_status=${ref_check_status:-not_checked}" >> "$GITHUB_OUTPUT"
-
-          if [[ "${preflight_ok}" == "true" ]]; then
-            echo "Source preflight passed for ${repo}@${effective_ref} (mode=${ref_mode})."
-          else
-            echo "::warning::Source preflight failed (${error_type}): ${error_message}"
-            exit 1
-          fi
+        run: bash .ci/scripts/source_preflight.sh
 
       - name: Checkout unifyops source for corpus runner
         id: source_checkout
@@ -250,10 +96,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          # Local source install is required because published 1.0.0 package variants can import app.config,
-          # which is unavailable in this infra workflow context.
           python -m pip install -e _deps/unifyops/shared/unifyops_core
-          # Required for unifyops_core schema import path (pydantic email validation).
           python -m pip install email-validator
 
       - name: Ensure corpus output directories exist
@@ -314,236 +157,21 @@ jobs:
             fi
           fi
 
-      - name: Emit corpus matrix SHA-256
-        id: matrix_digest
-        if: always() && hashFiles('evidence/validator/test-output/corpus-matrix-report-v1.json') != ''
-        run: |
-          set -euo pipefail
-          digest="$(sha256sum "${CORPUS_MATRIX}" | awk '{print $1}')"
-          echo "corpus_matrix_sha256=${digest}" >> "$GITHUB_OUTPUT"
-          echo "corpus_matrix_sha256=${digest}"
-
-      - name: Hydrate corpus matrix lineage defaults
-        if: always() && hashFiles('evidence/validator/test-output/corpus-matrix-report-v1.json') != ''
+      - name: Emit lineage, digests, and preflight summary
+        id: lineage_digests
+        if: always()
         env:
           GH_SHA: ${{ github.sha }}
           GH_RUN_ID: ${{ github.run_id }}
           GH_RUN_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import hashlib
-          import importlib.util
-          import json
-          import os
-          import subprocess
-          from pathlib import Path
-
-          matrix = Path(os.environ['CORPUS_MATRIX'])
-          data = json.loads(matrix.read_text(encoding='utf-8'))
-          lineage = data.get('lineage')
-          if not isinstance(lineage, dict):
-              lineage = {}
-              data['lineage'] = lineage
-
-          def nonempty(value):
-              return isinstance(value, str) and value.strip() != ''
-
-          def set_default(key, value):
-              if nonempty(lineage.get(key)):
-                  return
-              lineage[key] = value
-
-          gh_sha = os.environ.get('GH_SHA', '').strip()
-
-          source_commit_sha = gh_sha
-          try:
-              dep_sha = subprocess.check_output(
-                  ['git', '-C', '_deps/unifyops', 'rev-parse', 'HEAD'],
-                  text=True,
-                  stderr=subprocess.DEVNULL,
-              ).strip()
-              if dep_sha:
-                  source_commit_sha = dep_sha
-          except Exception:
-              pass
-
-          release_artifact_id = f"{os.environ.get('GH_RUN_ID', '').strip()}-{os.environ.get('GH_RUN_ATTEMPT', '').strip()}".strip('-')
-          release_artifact_checksum = hashlib.sha256(gh_sha.encode('utf-8')).hexdigest() if gh_sha else ''
-          runner_version = os.environ.get('UO_EVIDENCE_CORPUS_RUNNER_VERSION', '').strip() or '1.0.0'
-
-          runner_candidates = [
-              Path('_deps/unifyops/shared/unifyops_core/src/unifyops_core/evidence/validator/tools/corpus_runner.py'),
-              Path('_deps/unifyops/shared/unifyops_core/unifyops_core/evidence/validator/tools/corpus_runner.py'),
-              Path('shared/unifyops_core/src/unifyops_core/evidence/validator/tools/corpus_runner.py'),
-              Path('shared/unifyops_core/unifyops_core/evidence/validator/tools/corpus_runner.py'),
-          ]
-          spec = importlib.util.find_spec('unifyops_core.evidence.validator.tools.corpus_runner')
-          if spec and spec.origin:
-              module_path = Path(spec.origin)
-              if module_path.suffix == '.pyc':
-                  module_path = Path(str(module_path).replace('/__pycache__/', '/')).with_suffix('.py')
-              runner_candidates.insert(0, module_path)
-
-          runner_checksum = ''
-          for candidate in runner_candidates:
-              if candidate.is_file():
-                  runner_checksum = hashlib.sha256(candidate.read_bytes()).hexdigest()
-                  break
-
-          set_default('source_commit_sha', source_commit_sha)
-          set_default('release_artifact_id', release_artifact_id)
-          set_default('release_artifact_checksum', release_artifact_checksum)
-          set_default('runner_version', runner_version)
-          set_default('runner_checksum', runner_checksum)
-
-          matrix.write_text(json.dumps(data, indent=2, sort_keys=True) + '\n', encoding='utf-8')
-          print('hydrated lineage defaults (missing-only)')
-          PY
-
-
-      - name: Extract required lineage outputs
-        id: lineage
-        if: always() && hashFiles('evidence/validator/test-output/corpus-matrix-report-v1.json') != ''
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-
-          matrix = Path("evidence/validator/test-output/corpus-matrix-report-v1.json")
-          data = json.loads(matrix.read_text(encoding="utf-8"))
-          lineage = data.get("lineage", {})
-
-          import os
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
-              for key in (
-                  "source_commit_sha",
-                  "release_artifact_id",
-                  "release_artifact_checksum",
-                  "runner_version",
-                  "runner_checksum",
-              ):
-                  value = str(lineage.get(key, "")).strip()
-                  out.write(f"{key}={value}\\n")
-          PY
-
-      - name: Emit runner lineage audit fields
-        if: always() && hashFiles('evidence/validator/test-output/corpus-matrix-report-v1.json') != ''
-        run: |
-          set -euo pipefail
-          runner_version="${{ steps.lineage.outputs.runner_version }}"
-          if [[ -z "${runner_version}" ]]; then
-            runner_version="${UO_EVIDENCE_CORPUS_RUNNER_VERSION:-1.0.0}"
-          fi
-          echo "runner_version=${runner_version}"
-          echo "runner_checksum=${{ steps.lineage.outputs.runner_checksum }}"
-          echo "corpus_matrix_sha256=${{ steps.matrix_digest.outputs.corpus_matrix_sha256 }}"
-
-      - name: Emit lockfile SHA-256 (if present)
-        id: lockfile_digest
-        if: always()
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-          lockfiles=(poetry.lock requirements*.txt _deps/unifyops/poetry.lock _deps/unifyops/requirements*.txt)
-          IFS=$'\n' lockfiles=($(printf '%s\n' "${lockfiles[@]}" | sort -u))
-          unset IFS
-          searched_paths="$(printf '%s, ' "${lockfiles[@]}" | sed 's/, $//')"
-          echo "searched_lockfile_paths=${searched_paths}" >> "$GITHUB_OUTPUT"
-
-          valid_lockfiles=()
-          for lf in "${lockfiles[@]}"; do
-            if [[ -f "${lf}" ]]; then
-              valid_lockfiles+=("${lf}")
-            fi
-          done
-
-          manifest_path="_deps/unifyops/shared/unifyops_core/pyproject.toml"
-          manifest_sha=""
-          if [[ -f "${manifest_path}" ]]; then
-            manifest_sha="$(sha256sum "${manifest_path}" | awk '{print $1}')"
-            echo "source_manifest_path=${manifest_path}" >> "$GITHUB_OUTPUT"
-            echo "source_manifest_sha256=${manifest_sha}" >> "$GITHUB_OUTPUT"
-          else
-            echo "source_manifest_path=" >> "$GITHUB_OUTPUT"
-            echo "source_manifest_sha256=" >> "$GITHUB_OUTPUT"
-          fi
-
-          if (( ${#valid_lockfiles[@]} == 0 )); then
-            echo "::warning::No lockfile evidence present; searched paths: ${searched_paths}."
-            if [[ -n "${manifest_sha}" ]]; then
-              echo "Supplemental source dependency manifest detected: ${manifest_path} (sha256=${manifest_sha})"
-            fi
-            echo "lockfile_present=false" >> "$GITHUB_OUTPUT"
-            echo "lockfile_path=" >> "$GITHUB_OUTPUT"
-            echo "lockfile_sha256=" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          primary="${valid_lockfiles[0]}"
-          primary_sha="$(sha256sum "${primary}" | awk '{print $1}')"
-          echo "lockfile_present=true" >> "$GITHUB_OUTPUT"
-          echo "lockfile_path=${primary}" >> "$GITHUB_OUTPUT"
-          echo "lockfile_sha256=${primary_sha}" >> "$GITHUB_OUTPUT"
-          echo "lockfile_path=${primary}"
-          echo "lockfile_sha256=${primary_sha}"
-
-          for lf in "${valid_lockfiles[@]}"; do
-            if [[ -f "${lf}" ]]; then
-              sha="$(sha256sum "${lf}" | awk '{print $1}')"
-              echo "lockfile_sha256[${lf}]=${sha}"
-            else
-              echo "::warning::Lockfile disappeared before digesting: ${lf}"
-            fi
-          done
-
-      - name: Resolve expected corpus case count
-        id: expected_case_count
-        if: always()
-        run: |
-          set -euo pipefail
-          expected_count="${EXPECTED_CORPUS_CASE_COUNT}"
-          source_label="configured:EXPECTED_CORPUS_CASE_COUNT"
-
-          if [[ -z "${expected_count}" ]]; then
-            if [[ ! -d "${CORPUS_ROOT}" ]]; then
-              expected_count="0"
-              source_label="fallback:missing_corpus_root"
-              echo "::warning::Corpus root not found at ${CORPUS_ROOT}; expected case count defaults to 0 for deterministic reporting."
-            else
-              expected_count="$(find "${CORPUS_ROOT}" -type f -name 'expected-result.json' | wc -l | tr -d '[:space:]')"
-              source_label="auto-derived:${CORPUS_ROOT}"
-              echo "Auto-derived expected corpus case count=${expected_count} from ${CORPUS_ROOT}"
-            fi
-          else
-            echo "Using configured EXPECTED_CORPUS_CASE_COUNT=${expected_count}"
-          fi
-
-          echo "expected_count=${expected_count}" >> "$GITHUB_OUTPUT"
-          echo "expected_count_source=${source_label}" >> "$GITHUB_OUTPUT"
-
-      - name: Emit deterministic preflight summary
-        if: always()
-        env:
           SUMMARY_LANE: ${{ env.RELEASE_CONTROLLED_LANE }}
           SUMMARY_SOURCE_REPO: ${{ env.UO_EVIDENCE_CORPUS_SOURCE_REPO }}
           SUMMARY_SOURCE_REF: ${{ steps.source_preflight.outputs.effective_ref }}
           SUMMARY_REF_MODE: ${{ steps.source_preflight.outputs.ref_mode }}
           SUMMARY_PREFLIGHT_OK: ${{ steps.source_preflight.outputs.preflight_ok }}
-          SUMMARY_LOCKFILE_PRESENT: ${{ steps.lockfile_digest.outputs.lockfile_present }}
-          SUMMARY_EXPECTED_CASE_COUNT_SOURCE: ${{ steps.expected_case_count.outputs.expected_count_source }}
-        run: |
-          set -euo pipefail
-          echo "=== corpus-preflight-summary-v1 ==="
-          echo "lane=${SUMMARY_LANE}"
-          echo "source_repo=${SUMMARY_SOURCE_REPO}"
-          echo "source_ref=${SUMMARY_SOURCE_REF:-unset}"
-          echo "resolved_ref_mode=${SUMMARY_REF_MODE:-unset}"
-          echo "preflight_status=${SUMMARY_PREFLIGHT_OK:-false}"
-          echo "lockfile_present=${SUMMARY_LOCKFILE_PRESENT:-false}"
-          echo "expected_case_count_source=${SUMMARY_EXPECTED_CASE_COUNT_SOURCE:-unset}"
-          echo "=== /corpus-preflight-summary-v1 ==="
+          SUMMARY_LOCKFILE_PRESENT: ''
+          SUMMARY_EXPECTED_CASE_COUNT_SOURCE: ''
+        run: python3 .ci/scripts/emit_lineage.py
 
       - name: Evaluate lane-specific corpus evidence posture
         id: release_posture_policy
@@ -555,11 +183,11 @@ jobs:
           EFFECTIVE_REF: ${{ steps.source_preflight.outputs.effective_ref }}
           REF_MODE: ${{ steps.source_preflight.outputs.ref_mode }}
           REF_ORIGIN: ${{ steps.source_preflight.outputs.ref_origin }}
-          LOCKFILE_PRESENT: ${{ steps.lockfile_digest.outputs.lockfile_present }}
-          LOCKFILE_PATH: ${{ steps.lockfile_digest.outputs.lockfile_path }}
-          SEARCHED_LOCKFILE_PATHS: ${{ steps.lockfile_digest.outputs.searched_lockfile_paths }}
-          SOURCE_MANIFEST_PATH: ${{ steps.lockfile_digest.outputs.source_manifest_path }}
-          SOURCE_MANIFEST_SHA256: ${{ steps.lockfile_digest.outputs.source_manifest_sha256 }}
+          LOCKFILE_PRESENT: ${{ steps.lineage_digests.outputs.lockfile_present }}
+          LOCKFILE_PATH: ${{ steps.lineage_digests.outputs.lockfile_path }}
+          SEARCHED_LOCKFILE_PATHS: ${{ steps.lineage_digests.outputs.searched_lockfile_paths }}
+          SOURCE_MANIFEST_PATH: ${{ steps.lineage_digests.outputs.source_manifest_path }}
+          SOURCE_MANIFEST_SHA256: ${{ steps.lineage_digests.outputs.source_manifest_sha256 }}
         run: |
           set -euo pipefail
           release_lane="${RELEASE_CONTROLLED_LANE,,}"
@@ -617,59 +245,15 @@ jobs:
 
       - name: Build corpus artifacts integrity metadata
         if: always()
-        run: |
-          set -euo pipefail
-          mkdir -p "${CORPUS_OUTPUT_DIR}"
-          python3 - <<'PY'
-          import hashlib
-          import importlib.util
-          import json
-          import os
-          from pathlib import Path
-
-          out = Path(os.environ['CORPUS_OUTPUT_DIR']) / 'corpus-artifacts-metadata.json'
-
-          configured_runner_version = os.environ.get('UO_EVIDENCE_CORPUS_RUNNER_VERSION', '').strip() or '1.0.0'
-          lineage_runner_version = '${{ steps.lineage.outputs.runner_version }}'.strip()
-          runner_version = lineage_runner_version or configured_runner_version
-
-          runner_candidates = [
-              Path('_deps/unifyops/shared/unifyops_core/src/unifyops_core/evidence/validator/tools/corpus_runner.py'),
-              Path('_deps/unifyops/shared/unifyops_core/unifyops_core/evidence/validator/tools/corpus_runner.py'),
-          ]
-          spec = importlib.util.find_spec('unifyops_core.evidence.validator.tools.corpus_runner')
-          if spec and spec.origin:
-              module_path = Path(spec.origin)
-              if module_path.suffix == '.pyc':
-                  module_path = Path(str(module_path).replace('/__pycache__/', '/')).with_suffix('.py')
-              runner_candidates.insert(0, module_path)
-
-          runner_checksum = ''
-          for candidate in runner_candidates:
-              if candidate.is_file():
-                  runner_checksum = hashlib.sha256(candidate.read_bytes()).hexdigest()
-                  break
-
-          lineage_runner_checksum = '${{ steps.lineage.outputs.runner_checksum }}'.strip()
-          if not runner_checksum:
-              runner_checksum = lineage_runner_checksum
-
-          data = {
-              'corpus_matrix_path': os.environ.get('CORPUS_MATRIX', ''),
-              'corpus_matrix_sha256': '${{ steps.matrix_digest.outputs.corpus_matrix_sha256 }}',
-              'runner_version': runner_version,
-              'runner_checksum': runner_checksum,
-              'lockfile_path': '${{ steps.lockfile_digest.outputs.lockfile_path }}',
-              'lockfile_sha256': '${{ steps.lockfile_digest.outputs.lockfile_sha256 }}',
-              'source_manifest_path': '${{ steps.lockfile_digest.outputs.source_manifest_path }}',
-              'source_manifest_sha256': '${{ steps.lockfile_digest.outputs.source_manifest_sha256 }}',
-              'policy_outcome_path': os.environ.get('POLICY_OUTCOME_JSON', ''),
-              'artifact_manifest_path': os.environ.get('ARTIFACT_MANIFEST_JSON', ''),
-          }
-          out.write_text(json.dumps(data, indent=2, sort_keys=True) + '\n', encoding='utf-8')
-          print(f'wrote metadata: {out}')
-          PY
-
+        env:
+          LINEAGE_RUNNER_VERSION: ${{ steps.lineage_digests.outputs.runner_version }}
+          LINEAGE_RUNNER_CHECKSUM: ${{ steps.lineage_digests.outputs.runner_checksum }}
+          CORPUS_MATRIX_SHA256: ${{ steps.lineage_digests.outputs.corpus_matrix_sha256 }}
+          LOCKFILE_PATH: ${{ steps.lineage_digests.outputs.lockfile_path }}
+          LOCKFILE_SHA256: ${{ steps.lineage_digests.outputs.lockfile_sha256 }}
+          SOURCE_MANIFEST_PATH: ${{ steps.lineage_digests.outputs.source_manifest_path }}
+          SOURCE_MANIFEST_SHA256: ${{ steps.lineage_digests.outputs.source_manifest_sha256 }}
+        run: python3 .ci/scripts/build_governance_artifacts.py build-integrity-metadata
       - name: Validate corpus matrix policy gate
         id: validate_matrix_policy
         if: always() && hashFiles('evidence/validator/test-output/corpus-matrix-report-v1.json') != ''
@@ -683,12 +267,12 @@ jobs:
             --non-blocking-owner "${EVIDENCE_CORPUS_NON_BLOCKING_OWNER}"
             --non-blocking-expiry "${EVIDENCE_CORPUS_NON_BLOCKING_EXPIRY}"
             --ref-mode "${{ steps.source_preflight.outputs.ref_mode }}"
-            --lockfile-present "${{ steps.lockfile_digest.outputs.lockfile_present }}"
+            --lockfile-present "${{ steps.lineage_digests.outputs.lockfile_present }}"
             --policy-outcome-json "${POLICY_OUTCOME_JSON}"
           )
 
-          expected_count="${{ steps.expected_case_count.outputs.expected_count }}"
-          expected_count_source="${{ steps.expected_case_count.outputs.expected_count_source }}"
+          expected_count="${{ steps.lineage_digests.outputs.expected_count }}"
+          expected_count_source="${{ steps.lineage_digests.outputs.expected_count_source }}"
           if [[ -z "${expected_count}" ]]; then
             echo "::warning::Expected case count output missing from resolver; defaulting to 0"
             expected_count="0"
@@ -709,777 +293,33 @@ jobs:
         env:
           SUMMARY_LANE: ${{ env.RELEASE_CONTROLLED_LANE }}
           SUMMARY_REF_MODE: ${{ steps.source_preflight.outputs.ref_mode }}
-          SUMMARY_LOCKFILE_PRESENT: ${{ steps.lockfile_digest.outputs.lockfile_present }}
-        run: |
-          set -euo pipefail
-          if [[ ! -f "${POLICY_OUTCOME_JSON}" ]]; then
-            echo "::warning::policy outcome JSON missing at ${POLICY_OUTCOME_JSON}; writing deterministic fallback artifact"
-            mkdir -p "$(dirname "${POLICY_OUTCOME_JSON}")"
-            cat > "${POLICY_OUTCOME_JSON}" <<JSON
-          {
-            "lane": "${SUMMARY_LANE}",
-            "ref_mode": "${SUMMARY_REF_MODE:-unknown}",
-            "lockfile_present": ${SUMMARY_LOCKFILE_PRESENT:-false},
-            "completeness_mode": "none",
-            "gate_result": "unknown",
-            "reasons": [
-              {
-                "code": "CMX_POLICY_OUTCOME_ABSENT",
-                "message": "policy outcome artifact was not generated before self-check"
-              }
-            ]
-          }
-          JSON
-          fi
-
-          POLICY_OUTCOME_PATH="${POLICY_OUTCOME_JSON}" python3 - <<'PYJSON'
-          import json
-          import os
-          import pathlib
-
-          path = pathlib.Path(os.environ["POLICY_OUTCOME_PATH"])
-          payload = json.loads(path.read_text(encoding="utf-8"))
-          if not isinstance(payload, dict):
-              raise SystemExit(f"policy outcome payload must be object: {path}")
-          print(f"policy outcome JSON validated: {path}")
-          PYJSON
-
-
+          SUMMARY_LOCKFILE_PRESENT: ${{ steps.lineage_digests.outputs.lockfile_present }}
+        run: python3 .ci/scripts/validate_governance.py self-check-policy-outcome
       - name: Build deterministic artifact manifest index
         if: always()
         env:
           SUMMARY_REF_MODE: ${{ steps.source_preflight.outputs.ref_mode }}
-        run: |
-          set -euo pipefail
-          mkdir -p "${CORPUS_OUTPUT_DIR}"
-          python3 - <<'PY'
-          import hashlib
-          import json
-          import os
-          from pathlib import Path
-
-          output_dir = Path(os.environ['CORPUS_OUTPUT_DIR'])
-          manifest_path = Path(os.environ['ARTIFACT_MANIFEST_JSON'])
-          policy_outcome_path = Path(os.environ['POLICY_OUTCOME_JSON'])
-          release_lane = os.environ.get('RELEASE_CONTROLLED_LANE', '').strip().lower() == 'true'
-          lane = 'release' if release_lane else 'non-release'
-          ref_mode = (os.environ.get('SUMMARY_REF_MODE', '') or '').strip().lower() or 'unknown'
-
-          policy_gate_result = 'unknown'
-          if policy_outcome_path.is_file():
-              try:
-                  policy_payload = json.loads(policy_outcome_path.read_text(encoding='utf-8'))
-                  if isinstance(policy_payload, dict):
-                      candidate = str(policy_payload.get('gate_result', '')).strip().lower()
-                      if candidate:
-                          policy_gate_result = candidate
-              except Exception as exc:  # pragma: no cover - defensive parse for CI artifact emission
-                  print(f'::warning::unable to parse policy outcome for manifest lineage context: {exc}')
-
-          role_sources = {
-              'matrix': [Path(os.environ['CORPUS_MATRIX'])],
-              'summary': [Path(os.environ['CORPUS_SUMMARY'])],
-              'policy_outcome': [Path(os.environ['POLICY_OUTCOME_JSON'])],
-              'metadata': [output_dir / 'corpus-artifacts-metadata.json'],
-          }
-
-          reports_dir = Path(os.environ['CORPUS_REPORTS_DIR'])
-          case_report_files = []
-          if reports_dir.is_dir():
-              case_report_files = [p for p in reports_dir.rglob('*') if p.is_file()]
-          role_sources['case_reports'] = sorted(case_report_files, key=lambda p: p.as_posix())
-
-          entries = []
-          for role in ('matrix', 'summary', 'case_reports', 'policy_outcome', 'metadata'):
-              paths = role_sources[role]
-              if role != 'case_reports':
-                  paths = [p for p in paths if p.is_file()]
-              for path in paths:
-                  entries.append({
-                      'path': path.as_posix(),
-                      'role': role,
-                      'sha256': hashlib.sha256(path.read_bytes()).hexdigest(),
-                  })
-
-          entries.sort(key=lambda item: item['path'])
-
-          payload = {
-              'schema_version': 'artifact-manifest-v1',
-              'lane': lane,
-              'ref_mode': ref_mode,
-              'gate_result': policy_gate_result,
-              'lineage_context': {
-                  'lane': lane,
-                  'ref_mode': ref_mode,
-                  'gate_result': policy_gate_result,
-              },
-              'entries': entries,
-          }
-          manifest_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + '\n', encoding='utf-8')
-          print(f'wrote artifact manifest: {manifest_path} entries={len(entries)}')
-          PY
-
+        run: python3 .ci/scripts/build_governance_artifacts.py build-artifact-manifest
       - name: Enforce artifact role presence by lane
         if: always()
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-
-          manifest_path = Path(os.environ['ARTIFACT_MANIFEST_JSON'])
-          release_lane = os.environ.get('RELEASE_CONTROLLED_LANE', '').strip().lower() == 'true'
-
-          required_roles = {'matrix', 'summary', 'case_reports', 'policy_outcome', 'metadata'}
-
-          present_roles = set()
-          if manifest_path.is_file():
-              data = json.loads(manifest_path.read_text(encoding='utf-8'))
-              for entry in data.get('entries', []):
-                  role = str(entry.get('role', '')).strip()
-                  if role:
-                      present_roles.add(role)
-
-          missing = sorted(required_roles - present_roles)
-          if not missing:
-              print('artifact role presence check: all required roles present')
-          elif release_lane:
-              for role in missing:
-                  print(f'::error::[POLICY][RELEASE][ARTIFACT_ROLE_MISSING] required artifact role missing from manifest: {role}')
-              raise SystemExit(1)
-          else:
-              for role in missing:
-                  print(f'::warning::[POLICY][NON-RELEASE] required artifact role missing from manifest (warning-only in non-release lane): {role}')
-          PY
-
+        run: python3 .ci/scripts/validate_governance.py enforce-artifact-role-presence
       - name: Validate cross-artifact linkage integrity
         if: always()
         env:
           SUMMARY_REF_MODE: ${{ steps.source_preflight.outputs.ref_mode }}
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import hashlib
-          import json
-          import os
-          from pathlib import Path
-
-          release_lane = os.environ.get('RELEASE_CONTROLLED_LANE', '').strip().lower() == 'true'
-          expected_lane = 'release' if release_lane else 'non-release'
-          expected_ref_mode = (os.environ.get('SUMMARY_REF_MODE', '') or '').strip().lower() or 'unknown'
-
-          matrix_path = Path(os.environ['CORPUS_MATRIX'])
-          policy_path = Path(os.environ['POLICY_OUTCOME_JSON'])
-          metadata_path = Path(os.environ['CORPUS_OUTPUT_DIR']) / 'corpus-artifacts-metadata.json'
-          manifest_path = Path(os.environ['ARTIFACT_MANIFEST_JSON'])
-          outcome_path = Path(os.environ['ARTIFACT_LINKAGE_OUTCOME_JSON'])
-
-          reasons = []
-
-          def add_reason(code: str, message: str) -> None:
-              reasons.append({'code': code, 'message': message})
-
-          def normalize_lane(value: object) -> str:
-              token = str(value or '').strip().lower()
-              if token in {'release', 'release-controlled', 'release_controlled', 'true', '1', 'yes', 'on'}:
-                  return 'release'
-              if token in {'non-release', 'non_release', 'false', '0', 'no', 'off'}:
-                  return 'non-release'
-              if token == '':
-                  return 'unknown'
-              return token
-
-          metadata = {}
-          if metadata_path.is_file():
-              metadata = json.loads(metadata_path.read_text(encoding='utf-8'))
-          else:
-              add_reason('CMX_LINKAGE_METADATA_MISSING', f'metadata artifact missing: {metadata_path.as_posix()}')
-
-          if metadata:
-              expected_refs = {
-                  'corpus_matrix_path': matrix_path.as_posix(),
-                  'policy_outcome_path': policy_path.as_posix(),
-                  'artifact_manifest_path': manifest_path.as_posix(),
-              }
-              for key, expected in expected_refs.items():
-                  actual = str(metadata.get(key, '')).strip()
-                  if actual != expected:
-                      add_reason(
-                          'CMX_LINKAGE_METADATA_REF_MISMATCH',
-                          f'metadata.{key} mismatch: expected={expected} actual={actual or "<empty>"}',
-                      )
-
-          policy = {}
-          if policy_path.is_file():
-              try:
-                  payload = json.loads(policy_path.read_text(encoding='utf-8'))
-                  if isinstance(payload, dict):
-                      policy = payload
-                  else:
-                      add_reason('CMX_LINEAGE_POLICY_OUTCOME_INVALID', 'policy outcome artifact must be a JSON object')
-              except Exception as exc:
-                  add_reason('CMX_LINEAGE_POLICY_OUTCOME_INVALID', f'policy outcome artifact parse failure: {exc}')
-          else:
-              add_reason('CMX_LINEAGE_POLICY_OUTCOME_MISSING', f'policy outcome artifact missing: {policy_path.as_posix()}')
-
-          policy_lane = normalize_lane(policy.get('lane')) if policy else 'unknown'
-          policy_ref_mode = str(policy.get('ref_mode', '')).strip().lower() if policy else ''
-          policy_gate_result = str(policy.get('gate_result', '')).strip().lower() if policy else ''
-
-          manifest = {}
-          manifest_entries = {}
-          if manifest_path.is_file():
-              payload = json.loads(manifest_path.read_text(encoding='utf-8'))
-              if isinstance(payload, dict):
-                  manifest = payload
-                  for entry in payload.get('entries', []):
-                      p = str(entry.get('path', '')).strip()
-                      if p:
-                          manifest_entries[p] = str(entry.get('sha256', '')).strip().lower()
-              else:
-                  add_reason('CMX_LINKAGE_MANIFEST_INVALID', 'artifact manifest must be a JSON object')
-          else:
-              add_reason('CMX_LINKAGE_MANIFEST_MISSING', f'artifact manifest missing: {manifest_path.as_posix()}')
-
-          manifest_lane = normalize_lane(manifest.get('lane')) if manifest else 'unknown'
-          manifest_ref_mode = str(manifest.get('ref_mode', '')).strip().lower() if manifest else ''
-          manifest_gate_result = str(manifest.get('gate_result', '')).strip().lower() if manifest else ''
-
-          if policy and (not policy_ref_mode or not policy_gate_result or policy_lane == 'unknown'):
-              add_reason('CMX_LINEAGE_POLICY_FIELDS_MISSING', 'policy outcome missing one or more required lineage fields: lane/ref_mode/gate_result')
-          if manifest and (not manifest_ref_mode or not manifest_gate_result or manifest_lane == 'unknown'):
-              add_reason('CMX_LINEAGE_MANIFEST_FIELDS_MISSING', 'artifact manifest missing one or more required lineage fields: lane/ref_mode/gate_result')
-
-          lane_values = sorted(set(v for v in (expected_lane, policy_lane, manifest_lane) if v and v != 'unknown'))
-          if len(lane_values) > 1:
-              add_reason(
-                  'CMX_LINEAGE_LANE_MISMATCH',
-                  f'lane mismatch across artifacts: expected={expected_lane} policy={policy_lane} manifest={manifest_lane}',
-              )
-
-          ref_values = sorted(set(v for v in (expected_ref_mode, policy_ref_mode, manifest_ref_mode) if v))
-          if len(ref_values) > 1:
-              add_reason(
-                  'CMX_LINEAGE_REF_MODE_MISMATCH',
-                  f'ref_mode mismatch across artifacts: expected={expected_ref_mode} policy={policy_ref_mode or "<empty>"} manifest={manifest_ref_mode or "<empty>"}',
-              )
-
-          gate_values = sorted(set(v for v in (policy_gate_result, manifest_gate_result) if v))
-          if len(gate_values) > 1:
-              add_reason(
-                  'CMX_LINEAGE_GATE_RESULT_MISMATCH',
-                  f'gate_result mismatch across artifacts: policy={policy_gate_result or "<empty>"} manifest={manifest_gate_result or "<empty>"}',
-              )
-
-          required_files = [
-              ('matrix', matrix_path),
-              ('summary', Path(os.environ['CORPUS_SUMMARY'])),
-              ('policy_outcome', policy_path),
-              ('metadata', metadata_path),
-          ]
-
-          reports_dir = Path(os.environ['CORPUS_REPORTS_DIR'])
-          if reports_dir.is_dir():
-              for report_path in sorted([p for p in reports_dir.rglob('*') if p.is_file()], key=lambda p: p.as_posix()):
-                  required_files.append(('case_reports', report_path))
-
-          for role, file_path in required_files:
-              if not file_path.is_file():
-                  continue
-              key = file_path.as_posix()
-              actual_sha = hashlib.sha256(file_path.read_bytes()).hexdigest()
-              manifest_sha = manifest_entries.get(key, '')
-              if not manifest_sha:
-                  add_reason('CMX_LINKAGE_MANIFEST_ENTRY_MISSING', f'manifest entry missing for emitted {role} artifact: {key}')
-              elif manifest_sha.lower() != actual_sha.lower():
-                  add_reason(
-                      'CMX_LINKAGE_MANIFEST_SHA_MISMATCH',
-                      f'manifest sha mismatch for {key}: expected={actual_sha.lower()} actual={manifest_sha.lower()}',
-                  )
-
-          reasons = sorted(reasons, key=lambda r: (r.get('code', ''), r.get('message', '')))
-          gate_result = 'pass' if not reasons else ('fail' if release_lane else 'warn')
-
-          for reason in reasons:
-              code = reason['code']
-              message = reason['message']
-              if release_lane:
-                  print(f"::error::[POLICY][RELEASE][{code}] {message}")
-              else:
-                  print(f"::warning::[POLICY][NON-RELEASE][{code}] {message}")
-
-          outcome = {
-              'schema_version': 'artifact-linkage-outcome-v1',
-              'lane': expected_lane,
-              'ref_mode': expected_ref_mode,
-              'policy_gate_result': policy_gate_result or 'unknown',
-              'gate_result': gate_result,
-              'reasons': reasons,
-          }
-          outcome_path.write_text(json.dumps(outcome, indent=2, sort_keys=True) + '\n', encoding='utf-8')
-          print(f'wrote artifact linkage outcome: {outcome_path}')
-
-          if release_lane and reasons:
-              raise SystemExit(1)
-          PY
-
-
+        run: python3 .ci/scripts/validate_governance.py validate-linkage-integrity
       - name: Build deterministic reason code index artifact
         if: always()
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-
-          release_lane = os.environ.get('RELEASE_CONTROLLED_LANE', '').strip().lower() == 'true'
-          lane = 'release' if release_lane else 'non-release'
-
-          policy_path = Path(os.environ['POLICY_OUTCOME_JSON'])
-          linkage_path = Path(os.environ['ARTIFACT_LINKAGE_OUTCOME_JSON'])
-          out_path = Path(os.environ['REASON_CODES_INDEX_JSON'])
-
-          def load_json(path: Path) -> dict:
-              if not path.is_file():
-                  return {}
-              try:
-                  payload = json.loads(path.read_text(encoding='utf-8'))
-              except Exception:
-                  return {}
-              return payload if isinstance(payload, dict) else {}
-
-          policy = load_json(policy_path)
-          linkage = load_json(linkage_path)
-
-          policy_gate = str(policy.get('gate_result', '')).strip().lower()
-          linkage_gate = str(linkage.get('gate_result', '')).strip().lower()
-
-          def reason_severity(source: str) -> str:
-              if release_lane:
-                  return 'error'
-              if source == 'policy_outcome':
-                  return 'error' if policy_gate == 'fail' else 'warning'
-              if source == 'artifact_linkage_outcome':
-                  if linkage_gate == 'fail':
-                      return 'error'
-                  if linkage_gate == 'warn':
-                      return 'warning'
-                  return 'notice'
-              return 'warning'
-
-          grouped: dict[str, dict] = {}
-          severity_counts = {'error': 0, 'warning': 0, 'notice': 0}
-
-          def ingest(source: str, payload: dict) -> None:
-              reasons = payload.get('reasons', [])
-              if not isinstance(reasons, list):
-                  return
-              for item in reasons:
-                  if not isinstance(item, dict):
-                      continue
-                  code = str(item.get('code', '')).strip()
-                  if not code:
-                      continue
-                  severity = reason_severity(source)
-                  severity_counts[severity] = severity_counts.get(severity, 0) + 1
-                  entry = grouped.setdefault(code, {
-                      'code': code,
-                      'count': 0,
-                      'severity': severity,
-                      'sources': set(),
-                  })
-                  entry['count'] += 1
-                  entry['sources'].add(source)
-                  if entry['severity'] != 'error' and severity == 'error':
-                      entry['severity'] = 'error'
-                  elif entry['severity'] == 'notice' and severity == 'warning':
-                      entry['severity'] = 'warning'
-
-          ingest('policy_outcome', policy)
-          ingest('artifact_linkage_outcome', linkage)
-
-          reason_codes = []
-          for code in sorted(grouped):
-              item = grouped[code]
-              reason_codes.append({
-                  'code': item['code'],
-                  'count': int(item['count']),
-                  'severity': item['severity'],
-                  'sources': sorted(item['sources']),
-              })
-
-          payload = {
-              'schema_version': 'reason-codes-index-v1',
-              'lane': lane,
-              'policy_gate_result': policy_gate or 'unknown',
-              'artifact_linkage_gate_result': linkage_gate or 'unknown',
-              'source_artifacts': {
-                  'policy_outcome': policy_path.as_posix(),
-                  'artifact_linkage_outcome': linkage_path.as_posix(),
-              },
-              'reason_codes': reason_codes,
-              'severity_totals': {
-                  'error': int(severity_counts.get('error', 0)),
-                  'warning': int(severity_counts.get('warning', 0)),
-                  'notice': int(severity_counts.get('notice', 0)),
-              },
-          }
-
-          out_path.parent.mkdir(parents=True, exist_ok=True)
-          out_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + '\n', encoding='utf-8')
-
-          print('=== reason-code-diagnostics-v1 ===')
-          print(f'lane={lane}')
-          print(f"policy_gate_result={payload['policy_gate_result']}")
-          print(f"artifact_linkage_gate_result={payload['artifact_linkage_gate_result']}")
-          print(f"severity.error={payload['severity_totals']['error']}")
-          print(f"severity.warning={payload['severity_totals']['warning']}")
-          print(f"severity.notice={payload['severity_totals']['notice']}")
-          print(f'reason_code.unique={len(reason_codes)}')
-          print('=== /reason-code-diagnostics-v1 ===')
-          print(f'wrote reason code index: {out_path} entries={len(reason_codes)}')
-          PY
-
+        run: python3 .ci/scripts/build_governance_artifacts.py build-reason-code-index
       - name: Validate policy drift across governance artifacts
         if: always()
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-
-          release_lane = os.environ.get('RELEASE_CONTROLLED_LANE', '').strip().lower() == 'true'
-          expected_lane = 'release' if release_lane else 'non-release'
-
-          policy_path = Path(os.environ['POLICY_OUTCOME_JSON'])
-          reason_index_path = Path(os.environ['REASON_CODES_INDEX_JSON'])
-          linkage_path = Path(os.environ['ARTIFACT_LINKAGE_OUTCOME_JSON'])
-          out_path = Path(os.environ['POLICY_DRIFT_OUTCOME_JSON'])
-
-          reasons = []
-
-          def add_reason(code: str, message: str) -> None:
-              reasons.append({'code': code, 'message': message})
-
-          def normalize_lane(value: object) -> str:
-              token = str(value or '').strip().lower()
-              if token in {'release', 'release-controlled', 'release_controlled', 'true', '1', 'yes', 'on'}:
-                  return 'release'
-              if token in {'non-release', 'non_release', 'false', '0', 'no', 'off'}:
-                  return 'non-release'
-              if token == '':
-                  return 'unknown'
-              return token
-
-          def load_payload(path: Path, source: str) -> dict:
-              if not path.is_file():
-                  add_reason('CMX_DRIFT_ARTIFACT_MISSING', f'{source} artifact missing: {path.as_posix()}')
-                  return {}
-              try:
-                  payload = json.loads(path.read_text(encoding='utf-8'))
-              except Exception as exc:
-                  add_reason('CMX_DRIFT_ARTIFACT_INVALID', f'{source} artifact parse failure: {exc}')
-                  return {}
-              if not isinstance(payload, dict):
-                  add_reason('CMX_DRIFT_ARTIFACT_INVALID', f'{source} artifact must be a JSON object')
-                  return {}
-              return payload
-
-          policy = load_payload(policy_path, 'policy_outcome')
-          reason_index = load_payload(reason_index_path, 'reason_codes_index')
-          linkage = load_payload(linkage_path, 'artifact_linkage_outcome')
-
-          policy_lane = normalize_lane(policy.get('lane')) if policy else 'unknown'
-          reason_lane = normalize_lane(reason_index.get('lane')) if reason_index else 'unknown'
-          linkage_lane = normalize_lane(linkage.get('lane')) if linkage else 'unknown'
-
-          policy_gate = str(policy.get('gate_result', '')).strip().lower() if policy else ''
-          reason_policy_gate = str(reason_index.get('policy_gate_result', '')).strip().lower() if reason_index else ''
-          linkage_gate = str(linkage.get('gate_result', '')).strip().lower() if linkage else ''
-          reason_linkage_gate = str(reason_index.get('artifact_linkage_gate_result', '')).strip().lower() if reason_index else ''
-
-          policy_ref_mode = str(policy.get('ref_mode', '')).strip().lower() if policy else ''
-          linkage_ref_mode = str(linkage.get('ref_mode', '')).strip().lower() if linkage else ''
-
-          lane_values = sorted(set(v for v in (expected_lane, policy_lane, reason_lane, linkage_lane) if v and v != 'unknown'))
-          if len(lane_values) > 1:
-              add_reason(
-                  'CMX_DRIFT_LANE_MISMATCH',
-                  f'lane mismatch across artifacts: expected={expected_lane} policy={policy_lane} reason_index={reason_lane} linkage={linkage_lane}',
-              )
-
-          if policy_gate and reason_policy_gate and policy_gate != reason_policy_gate:
-              add_reason(
-                  'CMX_DRIFT_POLICY_GATE_RESULT_MISMATCH',
-                  f'policy gate_result mismatch: policy_outcome={policy_gate} reason_codes_index.policy_gate_result={reason_policy_gate}',
-              )
-
-          if linkage_gate and reason_linkage_gate and linkage_gate != reason_linkage_gate:
-              add_reason(
-                  'CMX_DRIFT_LINKAGE_GATE_RESULT_MISMATCH',
-                  f'artifact linkage gate_result mismatch: artifact_linkage_outcome={linkage_gate} reason_codes_index.artifact_linkage_gate_result={reason_linkage_gate}',
-              )
-
-          ref_values = sorted(set(v for v in (policy_ref_mode, linkage_ref_mode) if v))
-          if len(ref_values) > 1:
-              add_reason(
-                  'CMX_DRIFT_REF_MODE_MISMATCH',
-                  f'ref_mode mismatch across artifacts: policy_outcome={policy_ref_mode or "<empty>"} artifact_linkage_outcome={linkage_ref_mode or "<empty>"}',
-              )
-
-          if reason_index:
-              reason_codes = reason_index.get('reason_codes')
-              severity_totals = reason_index.get('severity_totals')
-              if not isinstance(reason_codes, list):
-                  add_reason('CMX_DRIFT_REASON_INDEX_SHAPE_INVALID', 'reason_codes_index.reason_codes must be an array')
-              if not isinstance(severity_totals, dict):
-                  add_reason('CMX_DRIFT_REASON_INDEX_SHAPE_INVALID', 'reason_codes_index.severity_totals must be an object')
-
-          reasons = sorted(reasons, key=lambda r: (r.get('code', ''), r.get('message', '')))
-          gate_result = 'pass' if not reasons else ('fail' if release_lane else 'warn')
-
-          for reason in reasons:
-              code = reason['code']
-              message = reason['message']
-              if release_lane:
-                  print(f"::error::[POLICY][RELEASE][{code}] {message}")
-              else:
-                  print(f"::warning::[POLICY][NON-RELEASE][{code}] {message}")
-
-          out_payload = {
-              'schema_version': 'policy-drift-outcome-v1',
-              'lane': expected_lane,
-              'gate_result': gate_result,
-              'reasons': reasons,
-              'source_artifacts': {
-                  'policy_outcome': policy_path.as_posix(),
-                  'reason_codes_index': reason_index_path.as_posix(),
-                  'artifact_linkage_outcome': linkage_path.as_posix(),
-              },
-              'policy_fields': {
-                  'policy_gate_result': policy_gate or 'unknown',
-                  'reason_index_policy_gate_result': reason_policy_gate or 'unknown',
-                  'artifact_linkage_gate_result': linkage_gate or 'unknown',
-                  'reason_index_artifact_linkage_gate_result': reason_linkage_gate or 'unknown',
-                  'policy_ref_mode': policy_ref_mode or 'unknown',
-                  'artifact_linkage_ref_mode': linkage_ref_mode or 'unknown',
-              },
-          }
-
-          out_path.parent.mkdir(parents=True, exist_ok=True)
-          out_path.write_text(json.dumps(out_payload, indent=2, sort_keys=True) + '\n', encoding='utf-8')
-          print(f'wrote policy drift outcome: {out_path}')
-
-          if release_lane and reasons:
-              raise SystemExit(1)
-          PY
-
+        run: python3 .ci/scripts/validate_governance.py validate-policy-drift
       - name: Validate evidence envelope cohesion
         if: always()
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-
-          release_lane = os.environ.get('RELEASE_CONTROLLED_LANE', '').strip().lower() == 'true'
-          lane = 'release' if release_lane else 'non-release'
-
-          output_path = Path(os.environ['ENVELOPE_COHESION_OUTCOME_JSON'])
-          output_path.parent.mkdir(parents=True, exist_ok=True)
-
-          governance_artifacts = {
-              'matrix': Path(os.environ['CORPUS_MATRIX']),
-              'metadata': Path(os.environ['CORPUS_OUTPUT_DIR']) / 'corpus-artifacts-metadata.json',
-              'manifest': Path(os.environ['ARTIFACT_MANIFEST_JSON']),
-              'policy_outcome': Path(os.environ['POLICY_OUTCOME_JSON']),
-              'artifact_linkage_outcome': Path(os.environ['ARTIFACT_LINKAGE_OUTCOME_JSON']),
-              'reason_codes_index': Path(os.environ['REASON_CODES_INDEX_JSON']),
-              'policy_drift_outcome': Path(os.environ['POLICY_DRIFT_OUTCOME_JSON']),
-          }
-
-          envelope_mapping = {
-              'matrix': 'evidence/envelope-inputs/corpus-matrix-report-v1.json',
-              'metadata': 'evidence/envelope-inputs/integrity-metadata.json',
-              'manifest': 'evidence/envelope-inputs/artifact-manifest-v1.json',
-              'policy_outcome': 'evidence/envelope-inputs/policy-outcome-v1.json',
-              'artifact_linkage_outcome': 'evidence/envelope-inputs/artifact-linkage-outcome-v1.json',
-              'reason_codes_index': 'evidence/envelope-inputs/reason-codes-index-v1.json',
-              'policy_drift_outcome': 'evidence/envelope-inputs/policy-drift-outcome-v1.json',
-          }
-
-          reasons = []
-
-          def add_reason(code: str, message: str) -> None:
-              reasons.append({'code': code, 'message': message})
-
-          produced = {name: path for name, path in governance_artifacts.items() if path.is_file()}
-          missing = {name: path for name, path in governance_artifacts.items() if not path.is_file()}
-
-          for name, path in sorted(missing.items()):
-              add_reason(
-                  'CMX_ENVELOPE_ARTIFACT_MISSING',
-                  f"governance artifact missing for envelope cohesion: {name} -> {path.as_posix()}",
-              )
-
-          # Planned envelope inputs mirror the release envelope builder logic (include artifact when present).
-          planned_inputs = {
-              name: target
-              for name, target in envelope_mapping.items()
-              if governance_artifacts[name].is_file()
-          }
-
-          for name in sorted(produced):
-              if name not in planned_inputs:
-                  add_reason(
-                      'CMX_ENVELOPE_INPUT_MISSING_FOR_ARTIFACT',
-                      f"produced governance artifact is not mapped into envelope inputs: {name}",
-                  )
-
-          for name in sorted(planned_inputs):
-              if name not in produced:
-                  add_reason(
-                      'CMX_ENVELOPE_INPUT_WITHOUT_ARTIFACT',
-                      f"envelope input mapping exists without emitted artifact: {name}",
-                  )
-
-          reasons = sorted(reasons, key=lambda r: (r.get('code', ''), r.get('message', '')))
-          gate_result = 'pass' if not reasons else ('fail' if release_lane else 'warn')
-
-          for reason in reasons:
-              code = reason['code']
-              message = reason['message']
-              if release_lane:
-                  print(f"::error::[POLICY][RELEASE][{code}] {message}")
-              else:
-                  print(f"::warning::[POLICY][NON-RELEASE][{code}] {message}")
-
-          payload = {
-              'schema_version': 'envelope-cohesion-outcome-v1',
-              'lane': lane,
-              'gate_result': gate_result,
-              'reasons': reasons,
-              'governance_artifacts': {
-                  name: {
-                      'path': governance_artifacts[name].as_posix(),
-                      'exists': governance_artifacts[name].is_file(),
-                      'envelope_input_path': envelope_mapping[name],
-                      'included_in_envelope_when_present': name in planned_inputs,
-                  }
-                  for name in sorted(governance_artifacts)
-              },
-              'source_artifacts': {
-                  'matrix': governance_artifacts['matrix'].as_posix(),
-                  'metadata': governance_artifacts['metadata'].as_posix(),
-                  'manifest': governance_artifacts['manifest'].as_posix(),
-                  'policy_outcome': governance_artifacts['policy_outcome'].as_posix(),
-                  'artifact_linkage_outcome': governance_artifacts['artifact_linkage_outcome'].as_posix(),
-                  'reason_codes_index': governance_artifacts['reason_codes_index'].as_posix(),
-                  'policy_drift_outcome': governance_artifacts['policy_drift_outcome'].as_posix(),
-              },
-          }
-
-          output_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + '\n', encoding='utf-8')
-          print(f'wrote envelope cohesion outcome: {output_path}')
-
-          if release_lane and reasons:
-              raise SystemExit(1)
-          PY
-
-
+        run: python3 .ci/scripts/validate_governance.py validate-envelope-cohesion
       - name: Validate deterministic replay-proof governance digests
         if: always()
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import hashlib
-          import json
-          import os
-          from pathlib import Path
-
-          release_lane = os.environ.get('RELEASE_CONTROLLED_LANE', '').strip().lower() == 'true'
-          lane = 'release' if release_lane else 'non-release'
-
-          targets = [
-              ('policy_outcome', Path(os.environ['POLICY_OUTCOME_JSON'])),
-              ('artifact_manifest', Path(os.environ['ARTIFACT_MANIFEST_JSON'])),
-              ('artifact_linkage_outcome', Path(os.environ['ARTIFACT_LINKAGE_OUTCOME_JSON'])),
-              ('reason_codes_index', Path(os.environ['REASON_CODES_INDEX_JSON'])),
-              ('policy_drift_outcome', Path(os.environ['POLICY_DRIFT_OUTCOME_JSON'])),
-              ('envelope_cohesion_outcome', Path(os.environ['ENVELOPE_COHESION_OUTCOME_JSON'])),
-          ]
-          out_path = Path(os.environ['DETERMINISM_OUTCOME_JSON'])
-          out_path.parent.mkdir(parents=True, exist_ok=True)
-
-          reasons = []
-
-          def add_reason(code: str, message: str) -> None:
-              reasons.append({'code': code, 'message': message})
-
-          def canonical_sha(path: Path) -> str:
-              payload = json.loads(path.read_text(encoding='utf-8'))
-              canonical = json.dumps(payload, sort_keys=True, separators=(',', ':'), ensure_ascii=False)
-              return hashlib.sha256(canonical.encode('utf-8')).hexdigest()
-
-          first_pass = {}
-          second_pass = {}
-
-          for name, path in targets:
-              if not path.is_file():
-                  add_reason('CMX_DETERMINISM_ARTIFACT_MISSING', f'missing required governance artifact for determinism check: {name} -> {path.as_posix()}')
-                  continue
-              try:
-                  first_pass[name] = canonical_sha(path)
-              except Exception as exc:
-                  add_reason('CMX_DETERMINISM_ARTIFACT_INVALID', f'failed canonical digest on first pass for {name} ({path.as_posix()}): {exc}')
-
-          for name, path in targets:
-              if name not in first_pass:
-                  continue
-              try:
-                  second_pass[name] = canonical_sha(path)
-              except Exception as exc:
-                  add_reason('CMX_DETERMINISM_ARTIFACT_INVALID', f'failed canonical digest on second pass for {name} ({path.as_posix()}): {exc}')
-                  continue
-
-              if first_pass[name] != second_pass[name]:
-                  add_reason(
-                      'CMX_DETERMINISM_DIGEST_MISMATCH',
-                      f'determinism digest mismatch within same run for {name}: pass1={first_pass[name]} pass2={second_pass[name]}',
-                  )
-
-          reasons = sorted(reasons, key=lambda r: (r.get('code', ''), r.get('message', '')))
-          gate_result = 'pass' if not reasons else ('fail' if release_lane else 'warn')
-
-          for reason in reasons:
-              if release_lane:
-                  print(f"::error::[POLICY][RELEASE][{reason['code']}] {reason['message']}")
-              else:
-                  print(f"::warning::[POLICY][NON-RELEASE][{reason['code']}] {reason['message']}")
-
-          payload = {
-              'schema_version': 'determinism-outcome-v1',
-              'lane': lane,
-              'gate_result': gate_result,
-              'reasons': reasons,
-              'source_artifacts': {name: path.as_posix() for name, path in targets},
-              'digest_replay': {
-                  'pass1': {k: first_pass[k] for k in sorted(first_pass)},
-                  'pass2': {k: second_pass[k] for k in sorted(second_pass)},
-              },
-          }
-
-          out_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + '\n', encoding='utf-8')
-          print(f'wrote determinism outcome: {out_path}')
-
-          if release_lane and reasons:
-              raise SystemExit(1)
-          PY
-
+        run: python3 .ci/scripts/validate_governance.py validate-determinism
       - name: Build governance summary artifact
         if: always()
         env:
@@ -1487,136 +327,93 @@ jobs:
           GH_RUN_ATTEMPT: ${{ github.run_attempt }}
           GH_SHA: ${{ github.sha }}
           GH_REF: ${{ github.ref }}
+        run: python3 .ci/scripts/build_governance_artifacts.py build-governance-summary
+      - name: Fetch prior governance trends from recent successful runs
+        id: fetch_prior_trends
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPOSITORY: ${{ github.repository }}
+          GH_CURRENT_RUN_ID: ${{ github.run_id }}
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          import datetime as dt
-          import hashlib
-          import json
-          import os
-          from pathlib import Path
+          mkdir -p "${GOVERNANCE_TRENDS_PRIOR_DIR}"
+          lookback="${GOVERNANCE_TRENDS_LOOKBACK_RUNS}"
+          echo "Fetching up to ${lookback} prior successful corpus-evidence-ci runs..."
 
-          release_lane = os.environ.get('RELEASE_CONTROLLED_LANE', '').strip().lower() == 'true'
-          lane = 'release' if release_lane else 'non-release'
-          out_path = Path(os.environ['GOVERNANCE_SUMMARY_JSON'])
-          out_path.parent.mkdir(parents=True, exist_ok=True)
+          run_ids="$(gh api \
+            "/repos/${GH_REPOSITORY}/actions/workflows/corpus-evidence-ci.yml/runs?status=success&per_page=${lookback}" \
+            --jq '.workflow_runs[].id' 2>/dev/null || true)"
 
-          # Collect all governance artifact paths + sha256
-          artifact_files = {
-              'corpus_matrix': Path(os.environ['CORPUS_MATRIX']),
-              'corpus_summary': Path(os.environ['CORPUS_SUMMARY']),
-              'corpus_artifacts_metadata': Path(os.environ['CORPUS_OUTPUT_DIR']) / 'corpus-artifacts-metadata.json',
-              'policy_outcome': Path(os.environ['POLICY_OUTCOME_JSON']),
-              'artifact_manifest': Path(os.environ['ARTIFACT_MANIFEST_JSON']),
-              'artifact_linkage_outcome': Path(os.environ['ARTIFACT_LINKAGE_OUTCOME_JSON']),
-              'reason_codes_index': Path(os.environ['REASON_CODES_INDEX_JSON']),
-              'policy_drift_outcome': Path(os.environ['POLICY_DRIFT_OUTCOME_JSON']),
-              'envelope_cohesion_outcome': Path(os.environ['ENVELOPE_COHESION_OUTCOME_JSON']),
-              'determinism_outcome': Path(os.environ['DETERMINISM_OUTCOME_JSON']),
-          }
+          if [[ -z "${run_ids}" ]]; then
+            echo "::notice::[TRENDS] No prior successful runs found; will use baseline mode."
+            echo "fetched_count=0" >> "$GITHUB_OUTPUT"
+            echo "fetch_status=no_prior_runs" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
-          artifacts = []
-          for name in sorted(artifact_files):
-              path = artifact_files[name]
-              entry = {'name': name, 'path': path.as_posix(), 'exists': path.is_file(), 'sha256': ''}
-              if path.is_file():
-                  entry['sha256'] = hashlib.sha256(path.read_bytes()).hexdigest()
-              artifacts.append(entry)
+          fetched=0
+          for rid in ${run_ids}; do
+            if [[ "${rid}" == "${GH_CURRENT_RUN_ID}" ]]; then
+              continue
+            fi
+            artifact_id="$(gh api \
+              "/repos/${GH_REPOSITORY}/actions/runs/${rid}/artifacts" \
+              --jq '.artifacts[] | select(.name=="corpus-matrix-report-v1") | .id' 2>/dev/null || true)"
+            if [[ -z "${artifact_id}" ]]; then
+              continue
+            fi
+            dest="${GOVERNANCE_TRENDS_PRIOR_DIR}/trends-run-${rid}.json"
+            tmpzip="$(mktemp)"
+            if gh api "/repos/${GH_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > "${tmpzip}" 2>/dev/null; then
+              if unzip -p "${tmpzip}" "evidence/validator/test-output/governance-trends-v1.json" > "${dest}" 2>/dev/null; then
+                if python3 -c "import json,sys; json.load(open(sys.argv[1]))" "${dest}" 2>/dev/null; then
+                  fetched=$((fetched + 1))
+                  echo "  fetched trends from run ${rid}"
+                else
+                  rm -f "${dest}"
+                fi
+              else
+                rm -f "${dest}"
+              fi
+            fi
+            rm -f "${tmpzip}"
+          done
 
-          # Also include case report files
-          reports_dir = Path(os.environ['CORPUS_REPORTS_DIR'])
-          if reports_dir.is_dir():
-              for rp in sorted(reports_dir.rglob('*')):
-                  if rp.is_file():
-                      artifacts.append({
-                          'name': 'case_report',
-                          'path': rp.as_posix(),
-                          'exists': True,
-                          'sha256': hashlib.sha256(rp.read_bytes()).hexdigest(),
-                      })
-
-          # Aggregate all emitted reason codes from governance artifacts
-          all_reasons = []
-          reason_source_files = [
-              ('policy_outcome', Path(os.environ['POLICY_OUTCOME_JSON'])),
-              ('artifact_linkage_outcome', Path(os.environ['ARTIFACT_LINKAGE_OUTCOME_JSON'])),
-              ('policy_drift_outcome', Path(os.environ['POLICY_DRIFT_OUTCOME_JSON'])),
-              ('envelope_cohesion_outcome', Path(os.environ['ENVELOPE_COHESION_OUTCOME_JSON'])),
-              ('determinism_outcome', Path(os.environ['DETERMINISM_OUTCOME_JSON'])),
-          ]
-          for source, path in reason_source_files:
-              if not path.is_file():
-                  continue
-              try:
-                  data = json.loads(path.read_text(encoding='utf-8'))
-                  for reason in data.get('reasons', []):
-                      if isinstance(reason, dict) and reason.get('code'):
-                          all_reasons.append({
-                              'code': reason['code'],
-                              'message': reason.get('message', ''),
-                              'source': source,
-                          })
-              except Exception:
-                  pass
-
-          all_reasons.sort(key=lambda r: (r.get('code', ''), r.get('source', ''), r.get('message', '')))
-
-          # Determine overall verdict from all gate_result fields
-          gate_results = []
-          for _, path in reason_source_files:
-              if not path.is_file():
-                  continue
-              try:
-                  data = json.loads(path.read_text(encoding='utf-8'))
-                  gr = str(data.get('gate_result', '')).strip().lower()
-                  if gr:
-                      gate_results.append(gr)
-              except Exception:
-                  pass
-
-          if 'fail' in gate_results:
-              verdict = 'fail'
-          elif 'warn' in gate_results:
-              verdict = 'warn'
-          elif gate_results:
-              verdict = 'pass'
-          else:
-              verdict = 'unknown'
-
-          payload = {
-              'schema_version': 'governance-summary-v1',
-              'timestamp': dt.datetime.now(dt.timezone.utc).isoformat(),
-              'lane': lane,
-              'lane_context': {
-                  'release_controlled': release_lane,
-                  'ref': os.environ.get('GH_REF', ''),
-                  'sha': os.environ.get('GH_SHA', ''),
-                  'run_id': os.environ.get('GH_RUN_ID', ''),
-                  'run_attempt': os.environ.get('GH_RUN_ATTEMPT', ''),
-              },
-              'verdict': verdict,
-              'reason_count': len(all_reasons),
-              'reasons': all_reasons,
-              'artifacts': artifacts,
-              'artifact_count': len(artifacts),
-              'gate_results': {source: '' for source, _ in reason_source_files},
-          }
-
-          # Fill in actual gate results
-          for source, path in reason_source_files:
-              if not path.is_file():
-                  payload['gate_results'][source] = 'missing'
-                  continue
-              try:
-                  data = json.loads(path.read_text(encoding='utf-8'))
-                  payload['gate_results'][source] = str(data.get('gate_result', 'unknown')).strip().lower()
-              except Exception:
-                  payload['gate_results'][source] = 'parse_error'
-
-          out_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + '\n', encoding='utf-8')
-          print(f'wrote governance summary: {out_path} verdict={verdict} artifacts={len(artifacts)} reasons={len(all_reasons)}')
-          PY
-
+          echo "fetched_count=${fetched}" >> "$GITHUB_OUTPUT"
+          if (( fetched > 0 )); then
+            echo "fetch_status=ok" >> "$GITHUB_OUTPUT"
+            echo "::notice::[TRENDS] Fetched ${fetched} prior trend records for historical accumulation."
+          else
+            echo "fetch_status=no_artifacts" >> "$GITHUB_OUTPUT"
+            echo "::notice::[TRENDS] No prior trend artifacts found; will use baseline mode."
+          fi
+      - name: Build governance trends artifact
+        if: always()
+        env:
+          GH_RUN_ID: ${{ github.run_id }}
+          GH_RUN_ATTEMPT: ${{ github.run_attempt }}
+          GH_SHA: ${{ github.sha }}
+          GH_REF: ${{ github.ref }}
+          PRIOR_TRENDS_FETCH_STATUS: ${{ steps.fetch_prior_trends.outputs.fetch_status || 'skipped' }}
+          PRIOR_TRENDS_FETCHED_COUNT: ${{ steps.fetch_prior_trends.outputs.fetched_count || '0' }}
+        run: python3 .ci/scripts/build_governance_artifacts.py build-governance-trends
+      - name: Build governance dashboard artifact
+        if: always()
+        env:
+          GH_RUN_ID: ${{ github.run_id }}
+          GH_RUN_ATTEMPT: ${{ github.run_attempt }}
+          GH_SHA: ${{ github.sha }}
+          GH_REF: ${{ github.ref }}
+        run: python3 .ci/scripts/build_governance_artifacts.py build-governance-dashboard
+      - name: Sign governance artifacts and validate tamper evidence
+        id: sign_and_verify
+        if: always()
+        env:
+          GH_SHA: ${{ github.sha }}
+          SIGNING_KEY_SECRET: ${{ secrets.GOVERNANCE_SIGNING_KEY || '' }}
+        run: python3 .ci/scripts/sign_and_verify.py
       - name: Upload corpus matrix artifact
         uses: actions/upload-artifact@v4
         if: always()
@@ -1634,6 +431,9 @@ jobs:
             ${{ env.ENVELOPE_COHESION_OUTCOME_JSON }}
             ${{ env.DETERMINISM_OUTCOME_JSON }}
             ${{ env.GOVERNANCE_SUMMARY_JSON }}
+            ${{ env.GOVERNANCE_TRENDS_JSON }}
+            ${{ env.ARTIFACT_SIGNATURES_JSON }}
+            ${{ env.GOVERNANCE_DASHBOARD_JSON }}
 
       - name: Upload corpus summary artifact
         uses: actions/upload-artifact@v4
@@ -1671,33 +471,32 @@ jobs:
           cp "${CORPUS_MATRIX}" evidence/envelope-inputs/
           cp "${CORPUS_SUMMARY}" evidence/envelope-inputs/
           cp -R "${CORPUS_REPORTS_DIR}" evidence/envelope-inputs/
-          if [[ -f "${CORPUS_OUTPUT_DIR}/corpus-artifacts-metadata.json" ]]; then
-            cp "${CORPUS_OUTPUT_DIR}/corpus-artifacts-metadata.json" evidence/envelope-inputs/integrity-metadata.json
-          fi
-          if [[ -f "${ARTIFACT_MANIFEST_JSON}" ]]; then
-            cp "${ARTIFACT_MANIFEST_JSON}" evidence/envelope-inputs/
-          fi
-          if [[ -f "${ARTIFACT_LINKAGE_OUTCOME_JSON}" ]]; then
-            cp "${ARTIFACT_LINKAGE_OUTCOME_JSON}" evidence/envelope-inputs/
-          fi
-          if [[ -f "${REASON_CODES_INDEX_JSON}" ]]; then
-            cp "${REASON_CODES_INDEX_JSON}" evidence/envelope-inputs/
-          fi
-          if [[ -f "${POLICY_DRIFT_OUTCOME_JSON}" ]]; then
-            cp "${POLICY_DRIFT_OUTCOME_JSON}" evidence/envelope-inputs/
-          fi
-          if [[ -f "${ENVELOPE_COHESION_OUTCOME_JSON}" ]]; then
-            cp "${ENVELOPE_COHESION_OUTCOME_JSON}" evidence/envelope-inputs/
-          fi
-          if [[ -f "${DETERMINISM_OUTCOME_JSON}" ]]; then
-            cp "${DETERMINISM_OUTCOME_JSON}" evidence/envelope-inputs/
-          fi
-          if [[ -f "${GOVERNANCE_SUMMARY_JSON}" ]]; then
-            cp "${GOVERNANCE_SUMMARY_JSON}" evidence/envelope-inputs/
-          fi
-          if [[ -n "${{ steps.lockfile_digest.outputs.lockfile_path }}" && -f "${{ steps.lockfile_digest.outputs.lockfile_path }}" ]]; then
+          for f in \
+            "${CORPUS_OUTPUT_DIR}/corpus-artifacts-metadata.json:integrity-metadata.json" \
+            "${ARTIFACT_MANIFEST_JSON}:" \
+            "${ARTIFACT_LINKAGE_OUTCOME_JSON}:" \
+            "${REASON_CODES_INDEX_JSON}:" \
+            "${POLICY_DRIFT_OUTCOME_JSON}:" \
+            "${ENVELOPE_COHESION_OUTCOME_JSON}:" \
+            "${DETERMINISM_OUTCOME_JSON}:" \
+            "${GOVERNANCE_SUMMARY_JSON}:" \
+            "${GOVERNANCE_TRENDS_JSON}:" \
+            "${ARTIFACT_SIGNATURES_JSON}:" \
+            "${GOVERNANCE_DASHBOARD_JSON}:"; do
+            src="${f%%:*}"
+            dest="${f#*:}"
+            if [[ -f "${src}" ]]; then
+              if [[ -n "${dest}" ]]; then
+                cp "${src}" "evidence/envelope-inputs/${dest}"
+              else
+                cp "${src}" evidence/envelope-inputs/
+              fi
+            fi
+          done
+          lockfile_path="${{ steps.lineage_digests.outputs.lockfile_path }}"
+          if [[ -n "${lockfile_path}" && -f "${lockfile_path}" ]]; then
             mkdir -p evidence/envelope-inputs/lockfiles
-            cp "${{ steps.lockfile_digest.outputs.lockfile_path }}" evidence/envelope-inputs/lockfiles/
+            cp "${lockfile_path}" evidence/envelope-inputs/lockfiles/
           fi
           tar -czf evidence/unified-evidence-envelope-inputs.tgz -C evidence envelope-inputs
 
