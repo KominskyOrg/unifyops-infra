@@ -20,7 +20,7 @@ replicaCount: 1
 # Image configuration
 image:
   repository: "identity-service"
-  tag: "bootstrap" # Updated by CI/CD workflow on the first dev build
+  tag: "469bc4f23b7f2f278ec70d087561fdf097d7af99" # Updated by CI/CD workflow on the first dev build
   pullPolicy: IfNotPresent # SHA tags are immutable, no need to always pull
 # Service configuration
 service:
