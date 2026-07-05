@@ -27,20 +27,18 @@ spec:
         containerMode:
           type: "dind"
 
-        # TEMPORARY BOOTSTRAP (UO-P0): upstream runner image while the
-        # hardened Harbor image is rebuilt by CI. v1.8 bundles runner
-        # 2.329.0, which GitHub deprecated ("cannot receive messages"),
-        # and pushing the rebuilt image requires a working runner.
-        # Revert to harbor.unifyops.io/library/arc-runner-unifyops:v1.9
-        # once the build-runner-image workflow has pushed it.
+        # Hardened runner image (kubectl/helm/yq/jq), rebuilt via the
+        # build-runner-image workflow in KominskyOrg/unifyops (CI-owned
+        # Harbor pushes). Rebuild + bump BEFORE GitHub deprecates the
+        # bundled actions/runner version (v1.8 died that way).
         template:
           spec:
             containers:
             - name: runner
-              image: ghcr.io/actions/actions-runner:latest
+              image: harbor.unifyops.io/library/arc-runner-unifyops:v1.9
               imagePullPolicy: Always
               command: ["/home/runner/run.sh"]
-            # Harbor registry credentials (kept for the v1.9 revert)
+            # Harbor registry credentials
             imagePullSecrets:
             - name: harbor-registry-secret
   destination:
