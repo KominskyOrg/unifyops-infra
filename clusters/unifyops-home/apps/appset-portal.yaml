@@ -1,0 +1,57 @@
+# Phase 3 (UO-P3-01): portal — the single canonical browser frontend,
+# consolidated from the retired auth-app/user-app SPAs. Serves / on the env
+# host; the SAME host's /api/v1 stays on platform-api's ingress, which also
+# keeps sole ownership of the host's TLS certificate + external-dns record
+# (UO-P1-10 lesson: exactly one ingress per host may carry the cert-manager
+# and external-dns annotations).
+# Dev only during Phase 3; staging/prod join with the old-stack retirement.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: portal
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - env: "dev"
+            branch: "dev"
+            namespace: "uo-dev"
+          # - env: "staging"
+          #   branch: "staging"
+          #   namespace: "uo-staging"
+          # prod (branch: main, namespace: uo-prod) in Phase 9
+  template:
+    metadata:
+      name: '{{env}}-portal'
+      labels:
+        stack: portal
+        appType: app
+        environment: '{{env}}'
+    spec:
+      project: apps
+      sources:
+        - repoURL: oci://harbor.unifyops.io/library/unifyops-stack
+          chart: unifyops-stack
+          targetRevision: "0.1.17"
+          helm:
+            valueFiles:
+              - $values/clusters/unifyops-home/apps/unifyops/portal/values-{{env}}.yaml
+        - repoURL: https://github.com/KominskyOrg/unifyops-infra.git
+          targetRevision: '{{branch}}'
+          ref: values
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 3m
