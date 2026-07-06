@@ -89,6 +89,37 @@ env:
         key: postgres-password
   - name: DATABASE_URL
     value: "postgresql://postgres:$(DB_PASSWORD)@unifyops-postgresql:5432/unifyops"
+  # JWT signing key (UO-P1-06): the chart's envFrom injects this secret
+  # under the env name "jwt-secret", which nothing reads — map it to the
+  # SECRET_KEY the service actually consumes. Without this the pod ran on
+  # the compiled-in default and the UO-P1-06 startup guard refuses to boot.
+  - name: SECRET_KEY
+    valueFrom:
+      secretKeyRef:
+        name: auth-jwt-secret
+        key: jwt-secret
+  # Service-to-service auth (UO-P1-07): per-caller keys + the service's
+  # own legacy key, from the identity-service-auth-keys sealed secret.
+  - name: SERVICE_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: identity-service-auth-keys
+        key: service-api-key
+  - name: SERVICE_AUTH_KEY_PLATFORM_API
+    valueFrom:
+      secretKeyRef:
+        name: identity-service-auth-keys
+        key: platform-api
+  - name: SERVICE_AUTH_KEY_PLATFORM_SERVICE
+    valueFrom:
+      secretKeyRef:
+        name: identity-service-auth-keys
+        key: platform-service
+  - name: SERVICE_AUTH_KEY_WORKER
+    valueFrom:
+      secretKeyRef:
+        name: identity-service-auth-keys
+        key: worker
 # Placement
 nodeSelector: {}
 tolerations: []
