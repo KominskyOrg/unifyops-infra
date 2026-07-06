@@ -103,6 +103,17 @@ env:
         key: postgres-password
   - name: DATABASE_URL
     value: "postgresql://postgres:$(DB_PASSWORD)@auth-service-postgresql:5432/auth_db"
+  # Baseline §11-Critical-3 (live SECRET_KEY defect, old-service side): the
+  # chart's envFrom injects the JWT secret under the env name "jwt-secret",
+  # which nothing reads — without this mapping the pod signs JWTs with the
+  # compiled-in default. Same fix identity-service got in UO-P1-06.
+  # NOTE: rolling this out invalidates previously issued dev tokens
+  # (they were signed with the default key) — dev users just re-login.
+  - name: SECRET_KEY
+    valueFrom:
+      secretKeyRef:
+        name: auth-jwt-secret
+        key: jwt-secret
 # - name: CUSTOM_FEATURE_FLAG
 #   value: "enabled"
 # - name: EXTERNAL_API_KEY
