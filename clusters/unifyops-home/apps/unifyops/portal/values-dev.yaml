@@ -1,0 +1,139 @@
+# portal — dev values (Phase 3, UO-P3-01).
+# The single canonical browser frontend (consolidated from the retired
+# auth-app/user-app SPAs): one React SPA served by nginx, talking to
+# platform-api at /api/v1 with cookie/BFF sessions + CSRF.
+#
+# Same-host routing: this ingress serves ONLY path / on dev.unifyops.io;
+# /api/v1 belongs to platform-api's ingress (longest-prefix wins in
+# ingress-nginx). TLS + external-dns for the host are OWNED by platform-api's
+# ingress (UO-P1-10 lesson) — this file must NOT carry cert-manager or
+# external-dns annotations, or a tls block, for dev.unifyops.io.
+
+# Global configuration
+global:
+  namespace: "uo-dev"
+  imageRegistry: "harbor.unifyops.io/library"
+  imagePullSecrets:
+    - name: harbor-registry
+# Stack configuration - Drives everything (appName = portal)
+stack:
+  name: portal
+  appType: app # frontend: port 3000, nginx emptyDirs, no DB/migrations/secrets
+enabled: true
+replicaCount: 1
+# Image configuration
+image:
+  repository: "portal"
+  tag: "bootstrap" # Updated by CI/CD workflow on the first dev build
+  pullPolicy: IfNotPresent # SHA tags are immutable, no need to always pull
+# Service configuration
+service:
+  type: ClusterIP
+  port: 3000
+  targetPort: 3000
+  annotations: {}
+# Configuration
+config:
+  apiPort: "3000"
+  environment: "development"
+# Resources (static nginx — light)
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi
+# Health checks (nginx serves / once the entrypoint has written /tmp/config.js)
+probes:
+  startup:
+    enabled: true
+    httpGet:
+      path: "/"
+      port: 3000
+    initialDelaySeconds: 0
+    periodSeconds: 10
+    timeoutSeconds: 1
+    failureThreshold: 30
+  readiness:
+    enabled: true
+    httpGet:
+      path: "/"
+      port: 3000
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 1
+    failureThreshold: 3
+  liveness:
+    enabled: true
+    httpGet:
+      path: "/"
+      port: 3000
+    initialDelaySeconds: 15
+    periodSeconds: 20
+    timeoutSeconds: 1
+    failureThreshold: 3
+# Autoscaling — DISABLED: chart 0.1.17 renders the HPA in sync wave 0 but the
+# Deployment in wave 2, so a brand-new app deadlocks (same trap platform-api
+# hit). Re-enable only after the chart orders the HPA after the Deployment.
+autoscaling:
+  enabled: false
+# Runtime configuration (docker-entrypoint.sh envsubst -> /tmp/config.js).
+# PORTAL_API_URL empty = same-origin /api/v1 (the canonical setup: the
+# ingress routes /api/v1 to platform-api on this same host).
+# PORTAL_API_PROXY_URL deliberately unset: the in-container nginx /api/v1
+# proxy is a compose/local convenience only.
+env:
+  - name: PORTAL_API_URL
+    value: ""
+  - name: PORTAL_APP_TITLE
+    value: "UnifyOps (dev)"
+# Placement
+nodeSelector: {}
+tolerations: []
+affinity: {}
+# Ingress — path-only rule on the shared host; NO cert-manager/external-dns
+# annotations and NO tls block (platform-api's ingress owns both; nginx
+# terminates TLS for the host with the cert it already carries).
+ingress:
+  enabled: true
+  className: "nginx-private"
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: dev.unifyops.io
+      paths:
+        - path: /
+          pathType: Prefix
+# Network policies: rely on the namespace-wide allow-from-ingress-controller
+# and allow-dns policies; the portal originates no egress of its own.
+networkPolicy:
+  enabled: true
+  ingressNamespace: nginx-private
+  defaultDeny:
+    ingress: false
+    egress: false
+# ServiceAccount
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+# Pod Security contexts
+podSecurityContext:
+  fsGroup: 1000
+  runAsNonRoot: true
+  runAsUser: 1000
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+# No database or secrets for the frontend
+postgresql:
+  enabled: false
+database:
+  waitForReady: false
+  readinessTimeout: 0
