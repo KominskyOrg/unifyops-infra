@@ -70,7 +70,7 @@ kubectl create secret generic auth-postgresql-secret \
   --namespace=uo-dev \
   --from-literal=postgres-password='<new-password>' \
   --dry-run=client -o yaml | kubectl apply -f -
-kubectl rollout restart deployment/auth-service -n uo-dev
+kubectl rollout restart deployment/identity-service -n uo-dev
 ```
 
 ### Harbor Registry Operations
@@ -92,14 +92,14 @@ docker push harbor.unifyops.io/library/myapp:latest
 
 ```bash
 # View application logs
-kubectl logs -n uo-dev deployment/auth-service
-kubectl logs -n uo-dev deployment/auth-api -f
+kubectl logs -n uo-dev deployment/identity-service
+kubectl logs -n uo-dev deployment/platform-api -f
 
 # Check ArgoCD sync status
-argocd app sync-status auth-service-dev
+argocd app sync-status dev-identity-service
 
 # Force sync an application
-argocd app sync auth-service-dev --prune
+argocd app sync dev-identity-service --prune
 
 # View ArgoCD events
 kubectl get events -n argocd --sort-by='.lastTimestamp'
@@ -129,8 +129,11 @@ unifyops-infra/
 │   └── unifyops-home/
 │       ├── apps/                 # ArgoCD Application definitions
 │       │   ├── root-apps.yaml    # App-of-apps pattern root
-│       │   ├── appset-auth.yaml  # ApplicationSet: auth stack (dev/staging/prod)
-│       │   ├── appset-user.yaml  # ApplicationSet: user stack (dev/staging/prod)
+│       │   ├── appset-identity-service.yaml  # ApplicationSet: identity-service (canonical)
+│       │   ├── appset-platform-api.yaml       # ApplicationSet: platform-api /api/v1 gateway (canonical)
+│       │   ├── appset-postgresql.yaml         # ApplicationSet: shared unifyops-postgresql
+│       │   ├── appset-auth.yaml  # LEGACY auth stack — dev retired (UO-P1-10); staging/prod frozen
+│       │   ├── appset-user.yaml  # LEGACY user stack — dev retired (UO-P1-10); staging/prod frozen
 │       │   ├── argocd/           # ArgoCD UI/ingress config
 │       │   ├── cert-manager/     # TLS certificate management
 │       │   ├── external-dns/     # Automatic DNS management
@@ -278,7 +281,7 @@ The cluster runs the following infrastructure services:
    - Harbor for trusted container images
 
 7. **Ingress Strategy**: Path-based and subdomain routing
-   - APIs: `/{app-type}/{stack-name}` (e.g., `/api/auth`)
+   - Canonical API: `/api/v1` → platform-api (legacy `/{app-type}/{stack-name}` paths retired in dev)
    - Frontend apps: `{stack}.{env}.unifyops.io`
    - See INGRESS-ROUTING.md for details
 
@@ -363,8 +366,8 @@ UnifyOps applications use the ApplicationSet pattern:
 
    ```bash
    # Images should be tagged as: harbor.unifyops.io/library/{app-name}:{tag}
-   docker build -t harbor.unifyops.io/library/auth-service:dev-latest .
-   docker push harbor.unifyops.io/library/auth-service:dev-latest
+   docker build -t harbor.unifyops.io/library/identity-service:<git-sha> .
+   docker push harbor.unifyops.io/library/identity-service:<git-sha>
    ```
 
 3. **Deploy to environment** via branch push:
@@ -462,10 +465,11 @@ helm push my-chart-1.0.0.tgz oci://harbor.unifyops.io/library
   - Automatically syncs new applications
   - Located in `infra` project
 
-- `clusters/unifyops-home/apps/appset-auth.yaml` / `appset-user.yaml`: Multi-environment ApplicationSets
-  - Generate one Application per env × appType (dev/staging/prod × service/api/app)
-  - Map branches to namespaces (dev→uo-dev, staging→uo-staging, main→uo-prod)
+- `clusters/unifyops-home/apps/appset-identity-service.yaml` / `appset-platform-api.yaml`: canonical identity path (dev)
   - Multi-source: unifyops-stack OCI chart from Harbor + values from this repo
+  - Map branches to namespaces (dev→uo-dev, staging→uo-staging, main→uo-prod)
+- `clusters/unifyops-home/apps/appset-auth.yaml` / `appset-user.yaml`: LEGACY multi-env ApplicationSets
+  - dev retired in UO-P1-10; still generate staging/prod apps frozen on last-built images
 
 ### Project Definitions
 
