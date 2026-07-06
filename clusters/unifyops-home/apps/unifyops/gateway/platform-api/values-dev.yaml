@@ -104,6 +104,13 @@ ingress:
   enabled: true
   className: "nginx-private"
   annotations:
+    # UO-P1-10: TLS + DNS ownership for dev.unifyops.io moved here from the
+    # retired auth-app/user-app ingresses (they carried the cert-manager and
+    # external-dns annotations; pruning them deleted the ingress-shim
+    # Certificate and left nginx serving its default self-signed cert).
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    external-dns.alpha.kubernetes.io/hostname: "dev.unifyops.io"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
     # Enable CORS (minimal transition config; tightened with UO-P1-09 cookies)
     nginx.ingress.kubernetes.io/enable-cors: "true"
     nginx.ingress.kubernetes.io/cors-allow-origin: "*"
@@ -116,7 +123,10 @@ ingress:
       paths:
         - path: /api/v1
           pathType: Prefix
-  tls: []
+  tls:
+    - secretName: dev-unifyops-tls
+      hosts:
+        - dev.unifyops.io
 # Secrets — chart envFrom injects this under the env name "jwt-secret"
 # (unused); the SECRET_KEY the service reads is mapped explicitly above.
 secrets:
