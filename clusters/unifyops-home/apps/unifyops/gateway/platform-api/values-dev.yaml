@@ -60,9 +60,12 @@ probes:
       port: 8002
     initialDelaySeconds: 30
     periodSeconds: 20
-# Autoscaling
+# Autoscaling — DISABLED for now: chart 0.1.17 renders the HPA in sync
+# wave 0 but the Deployment in wave 2, so a brand-new app deadlocks (HPA
+# unhealthy without its target -> wave 2 never applies). Re-enable after
+# the chart orders the HPA after the Deployment (follow-up ticket).
 autoscaling:
-  enabled: true
+  enabled: false
   minReplicas: 2
   maxReplicas: 10
   targetCPUUtilizationPercentage: 70
