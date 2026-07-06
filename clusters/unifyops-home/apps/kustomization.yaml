@@ -21,6 +21,7 @@ resources:
   - appset-postgresql.yaml
   - appset-identity-service.yaml
   - appset-platform-api.yaml
+  - appset-platform-service.yaml
   - appset-portal.yaml
   - appset-secrets.yaml
 
