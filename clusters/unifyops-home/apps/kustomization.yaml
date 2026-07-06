@@ -21,6 +21,7 @@ resources:
   - appset-postgresql.yaml
   - appset-identity-service.yaml
   - appset-platform-api.yaml
+  - appset-portal.yaml
   - appset-secrets.yaml
 
   # Each subdir has its own kustomization.yaml
