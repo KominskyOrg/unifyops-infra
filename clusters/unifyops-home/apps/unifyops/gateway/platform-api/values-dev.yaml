@@ -1,0 +1,155 @@
+# platform-api — dev values (UO-P1-08).
+# The single external gateway/BFF (renamed/evolved from auth-api): canonical
+# /api/v1 surface, local JWT verification (shared HS256 key with
+# identity-service), per-caller service auth to identity-service.
+# The OLD auth-api deployment stays untouched (last-built image) until
+# UO-P1-10 retires it — both gateways serve dev.unifyops.io during the
+# transition (/api/auth vs /api/v1 ingress paths).
+
+# Global configuration
+global:
+  namespace: "uo-dev"
+  imageRegistry: "harbor.unifyops.io/library"
+  imagePullSecrets:
+    - name: harbor-registry
+# Stack configuration - Drives everything (appName = platform-api)
+stack:
+  name: platform
+  appType: api
+enabled: true
+replicaCount: 1
+# Image configuration
+image:
+  repository: "platform-api"
+  tag: "bootstrap" # Updated by CI/CD workflow on the first dev build
+  pullPolicy: IfNotPresent # SHA tags are immutable, no need to always pull
+# Service configuration
+service:
+  type: ClusterIP
+  port: 8002
+  targetPort: 8002
+  annotations: {}
+# Configuration for the gateway
+config:
+  apiPort: "8002"
+  environment: "development"
+  # NOTE: custom config keys are upcased WITHOUT underscore insertion by the
+  # chart (identityServiceUrl -> IDENTITYSERVICEURL), so IDENTITY_SERVICE_URL
+  # lives in the env array below instead.
+# Resources
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+# Health checks (process-level; /api/v1/health never fails on upstream)
+probes:
+  readiness:
+    enabled: true
+    httpGet:
+      path: "/api/v1/health"
+      port: 8002
+    initialDelaySeconds: 10
+    periodSeconds: 10
+  liveness:
+    enabled: true
+    httpGet:
+      path: "/api/v1/health"
+      port: 8002
+    initialDelaySeconds: 30
+    periodSeconds: 20
+# Autoscaling
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+# Additional environment variables
+env:
+  - name: LOG_LEVEL
+    value: "INFO"
+  - name: ENABLE_METRICS
+    value: "true"
+  # identity-service upstream (internal, service-authenticated)
+  - name: IDENTITY_SERVICE_URL
+    value: "http://identity-service:8001"
+  - name: IDENTITY_SERVICE_PREFIX
+    value: "/service/identity"
+  # Shared HS256 signing key: identity-service signs access JWTs with the
+  # same secret, so the gateway verifies them locally (no verify hop).
+  - name: SECRET_KEY
+    valueFrom:
+      secretKeyRef:
+        name: auth-jwt-secret
+        key: jwt-secret
+  # Per-caller service-auth key (UO-P1-07): the `platform-api` entry of the
+  # identity-service-auth-keys sealed secret. Boot guard refuses placeholders.
+  - name: SERVICE_AUTH_KEY
+    valueFrom:
+      secretKeyRef:
+        name: identity-service-auth-keys
+        key: platform-api
+# Placement
+nodeSelector: {}
+tolerations: []
+affinity: {}
+# Ingress — the canonical external surface
+ingress:
+  enabled: true
+  className: "nginx-private"
+  annotations:
+    # Enable CORS (minimal transition config; tightened with UO-P1-09 cookies)
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, PATCH, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization,X-CSRF-Token"
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+    nginx.ingress.kubernetes.io/cors-max-age: "1728000"
+  hosts:
+    - host: dev.unifyops.io
+      paths:
+        - path: /api/v1
+          pathType: Prefix
+  tls: []
+# Secrets — chart envFrom injects this under the env name "jwt-secret"
+# (unused); the SECRET_KEY the service reads is mapped explicitly above.
+secrets:
+  jwtSecret: "" # Do not inline secrets - use existingSecret instead
+  existingSecret: "auth-jwt-secret"
+  existingSecretJwtKey: "jwt-secret"
+# Network policies. The chart's api-egress rule targets {stack}-service
+# (platform-service, which does not exist yet); traffic to identity-service
+# is allowed by the namespace-wide allow-same-namespace policy.
+networkPolicy:
+  enabled: true
+  ingressNamespace: nginx-private
+  defaultDeny:
+    ingress: true
+    egress: true
+# ServiceAccount
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+# Pod Security contexts
+podSecurityContext:
+  fsGroup: 1000
+  runAsNonRoot: true
+  runAsUser: 1000
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+# No database for the gateway
+postgresql:
+  enabled: false
+database:
+  waitForReady: false
+  readinessTimeout: 0
