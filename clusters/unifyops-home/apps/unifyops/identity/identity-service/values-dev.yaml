@@ -20,7 +20,7 @@ replicaCount: 1
 # Image configuration
 image:
   repository: "identity-service"
-  tag: "db436f787abb008b79a528193d33862edcf33952" # Updated by CI/CD workflow on the first dev build
+  tag: "3da84c4c5b4cb3c8adda441828cfaf4fc75a190a" # Updated by CI/CD workflow on the first dev build
   pullPolicy: IfNotPresent # SHA tags are immutable, no need to always pull
 # Service configuration
 service:
