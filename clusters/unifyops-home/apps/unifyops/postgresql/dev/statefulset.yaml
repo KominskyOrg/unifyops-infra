@@ -1,6 +1,7 @@
 # UO-P1-01: one shared PostgreSQL instance for the uo-dev environment.
 # Replaces the per-service Bitnami subchart pattern (auth-service-postgresql /
-# user-service-postgresql stay up during the Phase 1 transition; retired in UO-P1-10).
+# user-service-postgresql were retired in UO-P1-10; their data-* PVCs and
+# imperative secrets remain in uo-dev until the owner deletes them).
 # Database `unifyops` carries the `identity` and `platform` schemas (plan §2.4).
 # Image is the Harbor-hosted copy of the exact tag the existing instances run.
 apiVersion: apps/v1
