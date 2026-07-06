@@ -9,10 +9,10 @@ spec:
         generators:
           - list:
               elements:
-                - env: "dev"
-                  branch: "dev"
-                  namespace: "uo-dev"
-                  syncPolicy: "auto"
+                # dev retired in UO-P1-10: the auth stack is replaced by
+                # platform-api (/api/v1) + identity-service + shared unifyops-postgresql.
+                # staging/prod remain frozen on last-built images pending owner
+                # decision on staging/prod retirement + DB backup/retention.
                 - env: "staging"
                   branch: "staging"
                   namespace: "uo-staging"
