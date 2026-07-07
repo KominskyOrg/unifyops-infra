@@ -1,0 +1,55 @@
+# UO-P4-01: platform-service — the platform-domain service (environments
+# in Phase 4; applications/deployments/jobs/audit in Phases 5-7; the
+# Phase 5 worker shares this image). Dev only for now; staging/prod join
+# in Phase 9. Owns the `platform` schema in the shared per-env PostgreSQL
+# (its Helm migration job runs the platform Alembic chain).
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: platform-service
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - env: "dev"
+            branch: "dev"
+            namespace: "uo-dev"
+          # - env: "staging"
+          #   branch: "staging"
+          #   namespace: "uo-staging"
+          # prod (branch: main, namespace: uo-prod) in Phase 9
+  template:
+    metadata:
+      name: '{{env}}-platform-service'
+      labels:
+        stack: platform
+        appType: service
+        environment: '{{env}}'
+    spec:
+      project: apps
+      sources:
+        - repoURL: oci://harbor.unifyops.io/library/unifyops-stack
+          chart: unifyops-stack
+          targetRevision: "0.1.17"
+          helm:
+            valueFiles:
+              - $values/clusters/unifyops-home/apps/unifyops/platform/platform-service/values-{{env}}.yaml
+        - repoURL: https://github.com/KominskyOrg/unifyops-infra.git
+          targetRevision: '{{branch}}'
+          ref: values
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{namespace}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 3m
