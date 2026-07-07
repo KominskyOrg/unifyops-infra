@@ -107,6 +107,30 @@ env:
       secretKeyRef:
         name: identity-service-auth-keys
         key: service-api-key
+  # GitOps writer (UO-P6 slice 3): the worker commits rendered tenant
+  # desired state to unifyops-infra (tenants/** only — the writer's path
+  # guard enforces it; CI's GITOPS_PAT/clusters/** image bumps are a
+  # SEPARATE token and author). Branch dev = this environment's branch.
+  - name: GITOPS_REPO_URL
+    value: "https://github.com/KominskyOrg/unifyops-infra.git"
+  - name: GITOPS_BRANCH
+    value: "dev"
+  - name: GITOPS_TENANT_ROOT
+    value: "tenants"
+  - name: GITOPS_COMMIT_AUTHOR_NAME
+    value: "unifyops-platform"
+  - name: GITOPS_COMMIT_AUTHOR_EMAIL
+    value: "platform@unifyops.io"
+  # Fine-grained GitHub token, contents:write on unifyops-infra ONLY
+  # (gitops-writer-token sealed secret). optional: the worker boots
+  # without it and deployment jobs fail CLEARLY with
+  # error_type=gitops_credentials_missing instead of the pod crashing.
+  - name: GITOPS_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: gitops-writer-token
+        key: token
+        optional: true
 # Placement
 nodeSelector: {}
 tolerations: []
@@ -123,12 +147,14 @@ secrets:
 postgresql:
   enabled: false
 # Network policies: worker branch = deny-all ingress, egress to the
-# in-namespace postgresql primary + DNS only.
+# in-namespace postgresql primary + DNS, plus HTTPS (chart 0.2.1
+# workerHttpsEgress) so the GitOps writer can reach GitHub.
 networkPolicy:
   enabled: true
   defaultDeny:
     ingress: true
     egress: true
+  workerHttpsEgress: true
 # ServiceAccount (zero cluster permissions; automount stays off)
 serviceAccount:
   create: true
