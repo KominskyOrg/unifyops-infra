@@ -4,11 +4,10 @@ metadata:
   name: tenants
   namespace: argocd
 spec:
-  description: >-
-    UnifyOps tenant applications (UO-P6 slice 4). DEV ONLY: the single
-    allowed destination is the derived dev tenant namespace. Widening
-    this project (staging/prod destinations, more resource kinds) is a
-    deliberate later-slice decision — do not widen casually.
+  # DEV ONLY: single allowed destination = the derived dev tenant
+  # namespace. Widening this project (staging/prod destinations, more
+  # resource kinds) is a deliberate later-slice decision.
+  description: UnifyOps tenant applications (UO-P6 slice 4, dev only)
   sourceRepos:
     - 'https://github.com/KominskyOrg/unifyops-infra.git'
     - 'oci://harbor.unifyops.io/library/unifyops-stack'
