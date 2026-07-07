@@ -25,6 +25,8 @@ resources:
   - appset-platform-worker.yaml
   - appset-portal.yaml
   - appset-secrets.yaml
+  # UO-P6 slice 4: dev tenant apps (tenants/default/dev/*/values.yaml)
+  - appset-tenant-apps-dev.yaml
 
   # Each subdir has its own kustomization.yaml
   - argocd/

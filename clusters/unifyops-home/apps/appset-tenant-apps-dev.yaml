@@ -1,0 +1,65 @@
+# UO-P6 slice 4: dev tenant applications — the FIRST consumer of
+# tenants/**. A git files generator watches EXACTLY
+# tenants/default/dev/*/values.yaml on the dev branch (single `*` does
+# not cross `/`, so staging/prod/other-org paths can never match) and
+# renders one Application per tenant app from the platform worker's
+# generated chart-consumable values.
+#
+# Safety properties (do not weaken):
+# - Application name + destination derive from the PATH, never from
+#   file content — a crafted values file cannot redirect the deploy.
+# - The destination namespace is hardcoded to t-default-dev and the
+#   `tenants` AppProject only allows that destination + a narrow
+#   resource whitelist (no Secret/Job/Ingress).
+# - Namespace creation is CreateNamespace=true, i.e. dev-only by
+#   construction (this is the only tenant appset).
+# - prune: true is deliberate: deleting a tenant values file deletes
+#   the generated Application (ApplicationSet ownership) and its
+#   resources; values edits that drop a resource prune it likewise.
+# staging/prod tenant appsets are a later, explicit slice.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: tenant-apps-dev
+  namespace: argocd
+spec:
+  generators:
+    - git:
+        repoURL: https://github.com/KominskyOrg/unifyops-infra.git
+        revision: dev
+        files:
+          - path: tenants/default/dev/*/values.yaml
+  template:
+    metadata:
+      name: 't-default-dev-{{path.basename}}'
+      labels:
+        tenant-org: default
+        environment: dev
+        tenant-app: '{{path.basename}}'
+    spec:
+      project: tenants
+      sources:
+        - repoURL: oci://harbor.unifyops.io/library/unifyops-stack
+          chart: unifyops-stack
+          targetRevision: "0.2.1"
+          helm:
+            valueFiles:
+              - $values/{{path}}/values.yaml
+        - repoURL: https://github.com/KominskyOrg/unifyops-infra.git
+          targetRevision: dev
+          ref: values
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: t-default-dev
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 3m
