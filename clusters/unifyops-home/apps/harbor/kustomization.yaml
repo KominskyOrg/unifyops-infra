@@ -4,3 +4,4 @@ resources:
   - app.yaml
   - certificate.yaml
   - secrets/route53-credentials.sealed.yaml
+  - secrets/harbor-admin.sealed.yaml
