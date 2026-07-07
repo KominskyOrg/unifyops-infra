@@ -173,7 +173,9 @@ securityContext:
   capabilities:
     drop:
       - ALL
-  readOnlyRootFilesystem: false
+  # true since chart 0.2.2: workers get a /tmp emptyDir (heartbeat file +
+  # GitOps writer temp clones), so the rootfs can be read-only.
+  readOnlyRootFilesystem: true
   runAsNonRoot: true
   runAsUser: 1000
 # Common labels
