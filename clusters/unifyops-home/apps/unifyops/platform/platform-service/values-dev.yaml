@@ -25,7 +25,7 @@ replicaCount: 1
 # Image configuration
 image:
   repository: "platform-service"
-  tag: "f5157bbf26430c68508b05fb189277db3708f6fc" # Updated by CI/CD workflow on the first dev build
+  tag: "0624ea370c5f8aade147b5256ebc0ae7aa0a8119" # Updated by CI/CD workflow on the first dev build
   pullPolicy: IfNotPresent # SHA tags are immutable, no need to always pull
 # Service configuration
 service:
