@@ -1,0 +1,43 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: tenants
+  namespace: argocd
+spec:
+  description: >-
+    UnifyOps tenant applications (UO-P6 slice 4). DEV ONLY: the single
+    allowed destination is the derived dev tenant namespace. Widening
+    this project (staging/prod destinations, more resource kinds) is a
+    deliberate later-slice decision — do not widen casually.
+  sourceRepos:
+    - 'https://github.com/KominskyOrg/unifyops-infra.git'
+    - 'oci://harbor.unifyops.io/library/unifyops-stack'
+  destinations:
+    # Exactly the dev tenant namespace for the default org — NOT t-*.
+    # tenants/default/staging|prod (and any other org) stay undeployable
+    # until a future slice adds them here explicitly.
+    - namespace: t-default-dev
+      server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+    # CreateNamespace=true needs to create t-default-dev; nothing else
+    # cluster-scoped is permitted.
+    - group: ""
+      kind: Namespace
+  namespaceResourceWhitelist:
+    # Exactly what unifyops-stack renders for appType `app` (the only
+    # shape the platform worker generates). Deliberately ABSENT: Secret,
+    # Job, Ingress — a hand-crafted tenant values file trying to render
+    # those (appType service/api, ingress.enabled) fails the project
+    # check instead of deploying.
+    - group: "apps"
+      kind: Deployment
+    - group: ""
+      kind: Service
+    - group: ""
+      kind: ConfigMap
+    - group: ""
+      kind: ServiceAccount
+    - group: "networking.k8s.io"
+      kind: NetworkPolicy
+    - group: "autoscaling"
+      kind: HorizontalPodAutoscaler
