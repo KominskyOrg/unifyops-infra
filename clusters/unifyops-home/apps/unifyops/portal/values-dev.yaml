@@ -24,7 +24,7 @@ replicaCount: 1
 # Image configuration
 image:
   repository: "portal"
-  tag: "fa5ad22f65952820897123081724baca441d1486" # Updated by CI/CD workflow on the first dev build
+  tag: "efc1aa09df5e7d8957c759fc994c6af134be11b3" # Updated by CI/CD workflow on the first dev build
   pullPolicy: IfNotPresent # SHA tags are immutable, no need to always pull
 # Service configuration
 service:
