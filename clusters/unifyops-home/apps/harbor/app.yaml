@@ -12,7 +12,13 @@ spec:
     helm:
       values: |
         externalURL: https://harbor.unifyops.io
-        harborAdminPassword: "Y7gRUdjSi1W42maVxlTuKw=="
+        # Admin password comes from the harbor-admin SealedSecret
+        # (secrets/harbor-admin.sealed.yaml) — never plaintext in git.
+        # NOTE: the chart only consumes this at initial install; the live
+        # password lives in Harbor's DB. Rotation = change it in Harbor,
+        # then re-seal the new value here.
+        existingSecretAdminPassword: harbor-admin
+        existingSecretAdminPasswordKey: HARBOR_ADMIN_PASSWORD
         expose:
           type: ingress
           tls:
