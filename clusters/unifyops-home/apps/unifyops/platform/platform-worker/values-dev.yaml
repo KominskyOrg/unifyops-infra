@@ -1,0 +1,154 @@
+# platform-worker — dev values (UO-P5-02).
+# The job worker: SAME image/codebase as platform-service, entrypoint
+# `python -m app.worker` (chart 0.2.0 command override). Polls
+# platform.jobs with FOR UPDATE SKIP LOCKED; single replica in MVP
+# (PRD §5.6). No Service, no ingress, no migration job — platform-service
+# owns the platform Alembic chain, so this deployable must never migrate.
+# update-gitops bumps image.tag here whenever platform-service builds.
+#
+# Requires unifyops-stack >= 0.2.0 (command override, no-Service worker
+# appType, exec probes, worker netpol egress branch).
+
+# Global configuration
+global:
+  namespace: "uo-dev"
+  imageRegistry: "harbor.unifyops.io/library"
+  imagePullSecrets:
+    - name: harbor-registry
+# Stack configuration - This drives everything
+stack:
+  name: platform
+  appType: worker
+enabled: true
+# Single worker replica in MVP (PRD §5.6): SKIP LOCKED makes more
+# replicas safe, but one is deliberate until job volume needs more.
+replicaCount: 1
+# Image configuration — the platform-service image (shared codebase)
+image:
+  repository: "platform-service"
+  tag: "bootstrap" # Updated by CI/CD workflow on the first dev build
+  pullPolicy: IfNotPresent
+# Worker entrypoint (chart 0.2.0): same image, different process.
+command:
+  - python
+  - -m
+  - app.worker
+# Service block kept for the configmap's apiPort key; the worker appType
+# renders NO Service object and no containerPort (chart needsService gate).
+service:
+  type: ClusterIP
+  port: 8001
+  targetPort: 8001
+  annotations: {}
+# Configuration (adapts based on appType)
+config:
+  apiPort: "8001" # unused by the worker process; required by the chart's envVars
+  environment: "development"
+  databaseSchema: "platform"
+  logStyle: "otel"
+  enableOtelLogging: "true"
+  logLevel: "info"
+# No chart-side database wiring: the worker never migrates and gets its
+# DATABASE_URL via env[] below (needsDatabase is service-only anyway).
+database:
+  enabled: false
+  external:
+    enabled: false
+# Resource limits — the worker is idle-poll cheap
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 300m
+    memory: 256Mi
+# Probes: the worker exposes no HTTP port. Liveness = the heartbeat file
+# the loop touches every iteration (and on every job heartbeat); stale
+# for 2 minutes → restart. No meaningful readiness exists for a worker
+# (it serves no traffic), so it stays disabled.
+probes:
+  readiness:
+    enabled: false
+  liveness:
+    enabled: true
+    exec:
+      command:
+        - /bin/sh
+        - -c
+        - test -n "$(find /tmp/uo-worker-heartbeat -newermt '-120 seconds' 2>/dev/null)"
+    initialDelaySeconds: 30
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 3
+# Autoscaling: never for the MVP worker (single replica by design)
+autoscaling:
+  enabled: false
+# Observability (only works for api/service appTypes)
+observability:
+  enabled: false
+# Additional environment variables
+env:
+  - name: DB_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: unifyops-postgresql-secret
+        key: postgres-password
+  - name: DATABASE_URL
+    value: "postgresql://postgres:$(DB_PASSWORD)@unifyops-postgresql:5432/unifyops"
+  # Boot-guard secrets (UO-P1-06): the worker shares platform-service's
+  # Settings class, so both guarded fields need real values.
+  - name: SECRET_KEY
+    valueFrom:
+      secretKeyRef:
+        name: auth-jwt-secret
+        key: jwt-secret
+  - name: SERVICE_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: identity-service-auth-keys
+        key: service-api-key
+# Placement
+nodeSelector: {}
+tolerations: []
+affinity: {}
+# Ingress: never for a worker (chart needsIngress excludes it regardless)
+ingress:
+  enabled: false
+# Secrets: no chart-managed Secret is created for workers (needsSecrets);
+# everything arrives via the explicit env[] mappings above.
+secrets:
+  existingSecret: "auth-jwt-secret"
+  existingSecretJwtKey: "jwt-secret"
+# No per-service PostgreSQL subchart: shared instance (UO-P1-01)
+postgresql:
+  enabled: false
+# Network policies: worker branch = deny-all ingress, egress to the
+# in-namespace postgresql primary + DNS only.
+networkPolicy:
+  enabled: true
+  defaultDeny:
+    ingress: true
+    egress: true
+# ServiceAccount (zero cluster permissions; automount stays off)
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+# Pod Security contexts. readOnlyRootFilesystem stays FALSE here (unlike
+# platform-service): the liveness heartbeat file lives at
+# /tmp/uo-worker-heartbeat and the chart has no generic /tmp emptyDir for
+# worker pods yet — recorded limitation, revisit with a chart volume.
+podSecurityContext:
+  fsGroup: 1000
+  runAsNonRoot: true
+  runAsUser: 1000
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: false
+  runAsNonRoot: true
+  runAsUser: 1000
+# Common labels
+commonLabels: {}
