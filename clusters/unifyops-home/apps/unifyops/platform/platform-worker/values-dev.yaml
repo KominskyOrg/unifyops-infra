@@ -26,7 +26,7 @@ replicaCount: 1
 # Image configuration — the platform-service image (shared codebase)
 image:
   repository: "platform-service"
-  tag: "18b243da503f68499c7db1abaa01c07cedb9c5b0" # Updated by CI/CD workflow on the first dev build
+  tag: "0f9044a1bbe680b42e18bec9997ff16b40d9ffaf" # Updated by CI/CD workflow on the first dev build
   pullPolicy: IfNotPresent
 # Worker entrypoint (chart 0.2.0): same image, different process.
 command:
