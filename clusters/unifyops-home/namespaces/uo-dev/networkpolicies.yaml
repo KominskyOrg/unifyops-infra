@@ -60,3 +60,31 @@ spec:
           protocol: UDP
         - port: 53
           protocol: TCP
+---
+# UO-P6 slice 5: the platform worker's read-only Argo status observation.
+# The chart's workerHttpsEgress rule allows port 443, but the
+# argocd-server Service DNATs 443 -> targetPort 8080 and NetworkPolicy
+# is evaluated POST-DNAT — so the in-cluster call needs an explicit
+# allowance to the argocd-server pods on 8080. Dev-only (this file is
+# the uo-dev baseline); additive to the chart-owned worker policy.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: platform-worker-argo-egress
+  namespace: uo-dev
+spec:
+  podSelector:
+    matchLabels:
+      app: platform-worker
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: argocd
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: argocd-server
+      ports:
+        - port: 8080
+          protocol: TCP
