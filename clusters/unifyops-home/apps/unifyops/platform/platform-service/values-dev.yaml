@@ -88,6 +88,10 @@ observability:
   enabled: false
 # Additional environment variables
 env:
+  # Registry allowlist (owner follow-up, UO-P6 slice 5): the application
+  # registry only accepts Harbor-hosted image repositories in dev.
+  - name: ALLOWED_IMAGE_REPOSITORY_PREFIXES
+    value: "harbor.unifyops.io/"
   - name: DB_PASSWORD
     valueFrom:
       secretKeyRef:

@@ -130,6 +130,30 @@ env:
       secretKeyRef:
         name: gitops-writer-token
         key: token
+  # Argo status observation (UO-P6 slice 5): READ-ONLY project-scoped
+  # token (account uo-status-reader, RBAC = applications get tenants/*
+  # only). In-cluster service URL; self-signed cert -> verify off (the
+  # ingress hostname rides Tailscale and is not pod-reachable).
+  # optional: without the token, dev deployment jobs fail CLEARLY with
+  # error_type=argo_credentials_missing instead of the pod crashing.
+  - name: ARGO_BASE_URL
+    value: "https://argocd-server.argocd.svc.cluster.local"
+  - name: ARGO_TLS_VERIFY
+    value: "false"
+  - name: ARGO_APP_NAMESPACE
+    value: "argocd"
+  - name: ARGO_PROJECT
+    value: "tenants"
+  - name: ARGO_POLL_INTERVAL_SECONDS
+    value: "3"
+  - name: ARGO_SYNC_TIMEOUT_SECONDS
+    value: "300"
+  - name: ARGO_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: argo-status-token
+        key: token
+        optional: true
         optional: true
 # Placement
 nodeSelector: {}
